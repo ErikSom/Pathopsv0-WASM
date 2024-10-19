@@ -1,0 +1,3 @@
+[submodule "pathopsv0"]
+	path = pathopsv0
+	url = git@github.com:cclark2a/pathopsv0.git
