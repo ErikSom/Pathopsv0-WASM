@@ -30,10 +30,12 @@ fi
 
 # build ES6a
 echo "Building ES6"
-em++ $FLAGS -s EXPORT_ES6=1 -s NO_FILESYSTEM=1 -s ENVIRONMENT='web' \
-    pathopsv0-wasm/pathopsv0.bindings.cpp pathopsv0/build/pov0/libPathOps.a \
+emcc $FLAGS -s EXPORT_ES6=1 -s NO_FILESYSTEM=1 -s ENVIRONMENT='web' -s MODULARIZE=1 -s WASM_BIGINT -s ALLOW_MEMORY_GROWTH=1 -s EXIT_RUNTIME=0 -O3 -s DISABLE_EXCEPTION_CATCHING=1 \
+    -I./pathopsv0/src -I. -I./pathopsv0/debug -DOP_TINY_TEST=1 -DNDEBUG \
+    ./pathopsv0/PathOps.cpp ./pathopsv0/src/*.cpp ./pathopsv0/debug/OpDebug.cpp ./pathopsv0-wasm/bindings.cpp \
     -o pathopsv0-wasm/dist/es/pathops.js \
-    -s EXPORT_NAME="PathOps"
+    -s EXPORT_NAME="PathOps" \
+    --bind
 
 # # build UMD
 # echo "Building UMD"

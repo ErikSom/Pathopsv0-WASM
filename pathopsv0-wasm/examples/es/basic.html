@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>PathOpsV0 - ES6 - Example Basic</title>
+	<script src="../drawPath.js"></script>
+</head>
+<body>
+	<script type="module">
+		import PathopsV0Factory from '../../dist/es/pathops.js';
+
+		PathopsV0Factory().then((PathopsV0) => {
+			initCanvas(500, 500);
+
+			console.log('PathopsV0', PathopsV0);
+		});
+	</script>
+</body>
+</html>
