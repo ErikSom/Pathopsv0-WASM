@@ -1,6 +1,7 @@
 #include <emscripten/bind.h>
 #include "PathOps.h"  // Include your header with the function declarations
 #include "PathOpsTypes.h"  // Include other necessary headers for the types
+#include "skia/SkiaPaths.h"
 
 #include "curves/Line.h"
 #include "curves/NoCurve.h"
@@ -8,6 +9,14 @@
 
 using namespace emscripten;
 using namespace PathOpsV0Lib;
+
+CurveData* getCurveData(Curve& self) {
+    return self.data;
+}
+
+void setCurveData(Curve& self, CurveData* value) {
+    self.data = value;
+}
 
 
 EMSCRIPTEN_BINDINGS(my_module) {
@@ -48,18 +57,29 @@ EMSCRIPTEN_BINDINGS(my_module) {
     function("quadSubDivide", &quadSubDivide, allow_raw_pointers());
     function("quadXYAtT", &quadXYAtT, allow_raw_pointers());
 
-    // Expose Curve
-    class_<Curve>("Curve")
-        .constructor<>()
-        .property("data", &Curve::data)
-        .property("size", &Curve::size)
-        .property("type", &Curve::type);
+    // Expose OpPoint
+    value_object<OpPoint>("OpPoint")
+        .field("x", &OpPoint::x)
+        .field("y", &OpPoint::y);
 
-    // Expose enums
+    // Bind CurveData
+    class_<CurveData>("CurveData")
+        .property("start", &CurveData::start)
+        .property("end", &CurveData::end);
+
+    // Expose CurveType enum
     enum_<CurveType>("CurveType")
         .value("no", CurveType::no)
         .value("line", CurveType::line)
         .value("quad", CurveType::quad)
         .value("conic", CurveType::conic)
         .value("cubic", CurveType::cubic);
+
+    // Expose Curve struct
+    class_<Curve>("Curve")
+        .constructor<>()
+        .function("getData", &getCurveData, allow_raw_pointers())
+        .function("setData", &setCurveData, allow_raw_pointers())
+        .property("size", &Curve::size)
+        .property("type", &Curve::type);
 }
