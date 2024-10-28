@@ -22,9 +22,10 @@ void setCurveData(Curve& self, CurveData* value) {
 EMSCRIPTEN_BINDINGS(my_module) {
     // Expose functions
     function("CreateContext", &CreateContext, allow_raw_pointers());
+    function("DeleteContext", &DeleteContext, allow_raw_pointers());
+
     function("Add", &Add, allow_raw_pointers());
     function("CreateContour", &CreateContour, allow_raw_pointers());
-    function("DeleteContext", &DeleteContext, allow_raw_pointers());
     function("Error", &Error, allow_raw_pointers());
     function("ResetContour", &ResetContour, allow_raw_pointers());
     function("Resolve", &Resolve, allow_raw_pointers());
@@ -56,6 +57,9 @@ EMSCRIPTEN_BINDINGS(my_module) {
     function("quadPtCount", &quadPtCount, allow_raw_pointers());
     function("quadSubDivide", &quadSubDivide, allow_raw_pointers());
     function("quadXYAtT", &quadXYAtT, allow_raw_pointers());
+
+    class_<AddContext>("AddContext")
+        .constructor<>();
 
     // Expose OpPoint
     value_object<OpPoint>("OpPoint")
