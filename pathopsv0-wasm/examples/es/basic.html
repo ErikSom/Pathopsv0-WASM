@@ -13,49 +13,17 @@
 		PathopsV0Factory().then((PathopsV0) => {
 			initCanvas(500, 500);
 
+            const addContext = new PathopsV0.AddContext();
+            addContext.setData(0);
+            addContext.size = 0;
 
-			function setupPathOpsContext() {
-				console.log('PathopsV0', PathopsV0);
+            const context = PathopsV0.CreateContext(addContext);
 
-                const context = PathopsV0.CreateContext({ptr: null, size: 0});
+            console.log('context', context);
 
-
-                // Set up callbacks as defined in your code
-                PathopsV0.SetContextCallBacks(context, PathopsV0.noEmptyPath, PathopsV0.testNewMakeLine, PathopsV0.testNewSetLineType);
-                PathopsV0.SetCurveCallBacks(context, PathopsV0.lineAxisRawHit, PathopsV0.noHull, PathopsV0.lineIsFinite, 
-                                        PathopsV0.lineIsLine, PathopsV0.lineNormal, PathopsV0.lineOutput, PathopsV0.linePtAtT);
-
-                return context;
+            if (context) {
+                PathopsV0.DeleteContext(context);
             }
-
-            // Initialize and configure the context
-            const context = setupPathOpsContext();
-
-
-            // Define your contours and winding data
-            const contour1 = [
-                { x: 2, y: 0 }, { x: 1, y: 2 }, { x: 0, y: 2 }, // quad
-                { x: 1, y: 2 }, { x: 2, y: 3 }, // line
-                { x: 2, y: 0 } // line
-            ];
-
-            // Convert contour points to WebAssembly-compatible format
-            const contour1Ptr = PathopsV0._malloc(contour1.length * 8); // 8 bytes per point (2 floats)
-
-            // Populate contour1Ptr with data
-            contour1.forEach((point, i) => {
-                PathopsV0.setValue(contour1Ptr + i * 8, point.x, 'float');
-                PathopsV0.setValue(contour1Ptr + i * 8 + 4, point.y, 'float');
-            });
-
-            // Example function call with Add and Resolve
-            const windingData = new Int32Array([1]); // Example winding data
-            PathopsV0.AddQuads({ ptr: contour1Ptr, size: PathopsV0.lineSize, type: PathopsV0.lineType }, windingData);
-            PathopsV0.Resolve(context, null);
-
-            // Clean up
-            PathopsV0.DeleteContext(context);
-            PathopsV0._free(contour1Ptr);
 		});
 	</script>
 </body>

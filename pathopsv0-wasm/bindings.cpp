@@ -1,8 +1,7 @@
 #include <emscripten/bind.h>
-#include "PathOps.h"  // Include your header with the function declarations
-#include "PathOpsTypes.h"  // Include other necessary headers for the types
+#include "PathOps.h"
+#include "PathOpsTypes.h"
 #include "skia/SkiaPaths.h"
-
 #include "curves/Line.h"
 #include "curves/NoCurve.h"
 #include "curves/QuadBezier.h"
@@ -18,12 +17,22 @@ void setCurveData(Curve& self, CurveData* value) {
     self.data = value;
 }
 
+uintptr_t getAddContextData(AddContext& self) {
+    return reinterpret_cast<uintptr_t>(self.data);
+}
+
+void setAddContextData(AddContext& self, uintptr_t value) {
+    self.data = reinterpret_cast<void*>(value);
+}
+
+OpContours* getOpContoursFromContext(Context* ctx) {
+    return reinterpret_cast<OpContours*>(ctx);
+}
 
 EMSCRIPTEN_BINDINGS(my_module) {
     // Expose functions
     function("CreateContext", &CreateContext, allow_raw_pointers());
     function("DeleteContext", &DeleteContext, allow_raw_pointers());
-
     function("Add", &Add, allow_raw_pointers());
     function("CreateContour", &CreateContour, allow_raw_pointers());
     function("Error", &Error, allow_raw_pointers());
@@ -33,7 +42,6 @@ EMSCRIPTEN_BINDINGS(my_module) {
     function("SetCurveCallBacks", &SetCurveCallBacks, allow_raw_pointers());
     function("SetWindingCallBacks", &SetWindingCallBacks, allow_raw_pointers());
 
-    // Expose missing callback functions (example placeholders)
     function("noEmptyPath", &noEmptyPath, allow_raw_pointers());
 
     function("lineAxisRawHit", &lineAxisRawHit, allow_raw_pointers());
@@ -59,19 +67,22 @@ EMSCRIPTEN_BINDINGS(my_module) {
     function("quadXYAtT", &quadXYAtT, allow_raw_pointers());
 
     class_<AddContext>("AddContext")
+        .constructor<>()
+        .function("getData", &getAddContextData)
+        .function("setData", &setAddContextData)
+        .property("size", &AddContext::size);
+
+    class_<Context>("Context")
         .constructor<>();
 
-    // Expose OpPoint
     value_object<OpPoint>("OpPoint")
         .field("x", &OpPoint::x)
         .field("y", &OpPoint::y);
 
-    // Bind CurveData
     class_<CurveData>("CurveData")
         .property("start", &CurveData::start)
         .property("end", &CurveData::end);
 
-    // Expose CurveType enum
     enum_<CurveType>("CurveType")
         .value("no", CurveType::no)
         .value("line", CurveType::line)
@@ -79,7 +90,6 @@ EMSCRIPTEN_BINDINGS(my_module) {
         .value("conic", CurveType::conic)
         .value("cubic", CurveType::cubic);
 
-    // Expose Curve struct
     class_<Curve>("Curve")
         .constructor<>()
         .function("getData", &getCurveData, allow_raw_pointers())
