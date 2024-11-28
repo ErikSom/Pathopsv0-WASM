@@ -14,7 +14,7 @@ Module["ready"] = new Promise((resolve, reject) => {
  readyPromiseReject = reject;
 });
 
-[ "_main", "_memory", "___indirect_function_table", "__embind_initialize_bindings", "_fflush", "___set_stack_limits", "onRuntimeInitialized" ].forEach(prop => {
+[ "_malloc", "_free", "_memory", "___indirect_function_table", "__embind_initialize_bindings", "_fflush", "___set_stack_limits", "onRuntimeInitialized" ].forEach(prop => {
  if (!Object.getOwnPropertyDescriptor(Module["ready"], prop)) {
   Object.defineProperty(Module["ready"], prop, {
    get: () => abort("You are getting " + prop + " on the Promise object, instead of the instance. Use .then() to get called back with the instance, see the MODULARIZE docs in src/settings.js"),
@@ -3001,6 +3001,18 @@ function __embind_register_void(rawType, name) {
  });
 }
 
+function __emval_incref(handle) {
+ if (handle > 4) {
+  emval_handles.get(handle).refcount += 1;
+ }
+}
+
+function __emval_take_value(type, arg) {
+ type = requireRegisteredType(type, "_emval_take_value");
+ var v = type["readValueFromPointer"](arg);
+ return Emval.toHandle(v);
+}
+
 var _abort = () => {
  abort("native code called abort()");
 };
@@ -3118,6 +3130,149 @@ var _fd_write = (fd, iov, iovcnt, pnum) => {
  return 0;
 };
 
+function uleb128Encode(n, target) {
+ assert(n < 16384);
+ if (n < 128) {
+  target.push(n);
+ } else {
+  target.push(n % 128 | 128, n >> 7);
+ }
+}
+
+function sigToWasmTypes(sig) {
+ var typeNames = {
+  "i": "i32",
+  "j": "i64",
+  "f": "f32",
+  "d": "f64",
+  "p": "i32"
+ };
+ var type = {
+  parameters: [],
+  results: sig[0] == "v" ? [] : [ typeNames[sig[0]] ]
+ };
+ for (var i = 1; i < sig.length; ++i) {
+  assert(sig[i] in typeNames, "invalid signature char: " + sig[i]);
+  type.parameters.push(typeNames[sig[i]]);
+ }
+ return type;
+}
+
+function generateFuncType(sig, target) {
+ var sigRet = sig.slice(0, 1);
+ var sigParam = sig.slice(1);
+ var typeCodes = {
+  "i": 127,
+  "p": 127,
+  "j": 126,
+  "f": 125,
+  "d": 124
+ };
+ target.push(96);
+ uleb128Encode(sigParam.length, target);
+ for (var i = 0; i < sigParam.length; ++i) {
+  assert(sigParam[i] in typeCodes, "invalid signature char: " + sigParam[i]);
+  target.push(typeCodes[sigParam[i]]);
+ }
+ if (sigRet == "v") {
+  target.push(0);
+ } else {
+  target.push(1, typeCodes[sigRet]);
+ }
+}
+
+function convertJsFunctionToWasm(func, sig) {
+ if (typeof WebAssembly.Function == "function") {
+  return new WebAssembly.Function(sigToWasmTypes(sig), func);
+ }
+ var typeSectionBody = [ 1 ];
+ generateFuncType(sig, typeSectionBody);
+ var bytes = [ 0, 97, 115, 109, 1, 0, 0, 0, 1 ];
+ uleb128Encode(typeSectionBody.length, bytes);
+ bytes.push.apply(bytes, typeSectionBody);
+ bytes.push(2, 7, 1, 1, 101, 1, 102, 0, 0, 7, 5, 1, 1, 102, 0, 0);
+ var module = new WebAssembly.Module(new Uint8Array(bytes));
+ var instance = new WebAssembly.Instance(module, {
+  "e": {
+   "f": func
+  }
+ });
+ var wrappedFunc = instance.exports["f"];
+ return wrappedFunc;
+}
+
+function updateTableMap(offset, count) {
+ if (functionsInTableMap) {
+  for (var i = offset; i < offset + count; i++) {
+   var item = getWasmTableEntry(i);
+   if (item) {
+    functionsInTableMap.set(item, i);
+   }
+  }
+ }
+}
+
+var functionsInTableMap = undefined;
+
+function getFunctionAddress(func) {
+ if (!functionsInTableMap) {
+  functionsInTableMap = new WeakMap;
+  updateTableMap(0, wasmTable.length);
+ }
+ return functionsInTableMap.get(func) || 0;
+}
+
+var freeTableIndexes = [];
+
+function getEmptyTableSlot() {
+ if (freeTableIndexes.length) {
+  return freeTableIndexes.pop();
+ }
+ try {
+  wasmTable.grow(1);
+ } catch (err) {
+  if (!(err instanceof RangeError)) {
+   throw err;
+  }
+  throw "Unable to grow wasm table. Set ALLOW_TABLE_GROWTH.";
+ }
+ return wasmTable.length - 1;
+}
+
+var setWasmTableEntry = (idx, func) => {
+ wasmTable.set(idx, func);
+ wasmTableMirror[idx] = wasmTable.get(idx);
+};
+
+function addFunction(func, sig) {
+ assert(typeof func != "undefined");
+ var rtn = getFunctionAddress(func);
+ if (rtn) {
+  return rtn;
+ }
+ for (var i = 0; i < wasmTable.length; i++) {
+  assert(getWasmTableEntry(i) != func, "function in Table but not functionsInTableMap");
+ }
+ var ret = getEmptyTableSlot();
+ try {
+  setWasmTableEntry(ret, func);
+ } catch (err) {
+  if (!(err instanceof TypeError)) {
+   throw err;
+  }
+  assert(typeof sig != "undefined", "Missing signature argument to addFunction: " + func);
+  var wrapped = convertJsFunctionToWasm(func, sig);
+  setWasmTableEntry(ret, wrapped);
+ }
+ functionsInTableMap.set(func, ret);
+ return ret;
+}
+
+function removeFunction(index) {
+ functionsInTableMap.delete(getWasmTableEntry(index));
+ freeTableIndexes.push(index);
+}
+
 InternalError = Module["InternalError"] = class InternalError extends Error {
  constructor(message) {
   super(message);
@@ -3173,6 +3328,9 @@ var wasmImports = {
  _embind_register_value_object: __embind_register_value_object,
  _embind_register_value_object_field: __embind_register_value_object_field,
  _embind_register_void: __embind_register_void,
+ _emval_decref: __emval_decref,
+ _emval_incref: __emval_incref,
+ _emval_take_value: __emval_take_value,
  abort: _abort,
  alignfault: alignfault,
  emscripten_memcpy_big: _emscripten_memcpy_big,
@@ -3199,9 +3357,9 @@ var _emscripten_get_sbrk_ptr = createExportWrapper("emscripten_get_sbrk_ptr");
 
 var _sbrk = createExportWrapper("sbrk");
 
-var _malloc = createExportWrapper("malloc");
+var _malloc = Module["_malloc"] = createExportWrapper("malloc");
 
-var _free = createExportWrapper("free");
+var _free = Module["_free"] = createExportWrapper("free");
 
 var _emscripten_stack_init = () => (_emscripten_stack_init = wasmExports["emscripten_stack_init"])();
 
@@ -3225,11 +3383,15 @@ var ___cxa_is_pointer_type = createExportWrapper("__cxa_is_pointer_type");
 
 var ___set_stack_limits = Module["___set_stack_limits"] = createExportWrapper("__set_stack_limits");
 
-var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertI32PairToI53Checked", "convertU32PairToI53", "zeroMemory", "exitJS", "isLeapYear", "ydayFromDate", "arraySum", "addDays", "setErrNo", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "getHostByName", "initRandomFill", "randomFill", "getCallstack", "emscriptenLog", "convertPCtoSourceLocation", "readEmAsmArgs", "jstoi_q", "jstoi_s", "getExecutableName", "listenOnce", "autoResumeAudioContext", "getDynCaller", "dynCall", "handleException", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "safeSetTimeout", "asmjsMangle", "asyncLoad", "alignMemory", "mmapAlloc", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "addFunction", "removeFunction", "reallyNegative", "strLen", "reSign", "formatString", "intArrayFromString", "intArrayToString", "AsciiToString", "stringToAscii", "stringToNewUTF8", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "findCanvasEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "getEnvStrings", "checkWasiClock", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "createDyncallWrapper", "setImmediateWrapped", "clearImmediateWrapped", "polyfillSetImmediate", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "findMatchingCatch", "setMainLoop", "getSocketFromFD", "getSocketAddress", "heapObjectForWebGLType", "heapAccessShiftForWebGLHeap", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "__glGenObject", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "SDL_unicode", "SDL_ttfContext", "SDL_audio", "GLFW_Window", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "registerInheritedInstance", "unregisterInheritedInstance", "getStringOrSymbol", "craftEmvalAllocator", "emval_get_global", "emval_lookupTypes", "emval_allocateDestructors", "emval_addMethodCaller" ];
+Module["addFunction"] = addFunction;
+
+Module["removeFunction"] = removeFunction;
+
+var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertI32PairToI53Checked", "convertU32PairToI53", "zeroMemory", "exitJS", "isLeapYear", "ydayFromDate", "arraySum", "addDays", "setErrNo", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "getHostByName", "initRandomFill", "randomFill", "getCallstack", "emscriptenLog", "convertPCtoSourceLocation", "readEmAsmArgs", "jstoi_q", "jstoi_s", "getExecutableName", "listenOnce", "autoResumeAudioContext", "getDynCaller", "dynCall", "handleException", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "safeSetTimeout", "asmjsMangle", "asyncLoad", "alignMemory", "mmapAlloc", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "reallyNegative", "strLen", "reSign", "formatString", "intArrayFromString", "intArrayToString", "AsciiToString", "stringToAscii", "stringToNewUTF8", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "findCanvasEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "getEnvStrings", "checkWasiClock", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "createDyncallWrapper", "setImmediateWrapped", "clearImmediateWrapped", "polyfillSetImmediate", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "findMatchingCatch", "setMainLoop", "getSocketFromFD", "getSocketAddress", "heapObjectForWebGLType", "heapAccessShiftForWebGLHeap", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "__glGenObject", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "SDL_unicode", "SDL_ttfContext", "SDL_audio", "GLFW_Window", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "registerInheritedInstance", "unregisterInheritedInstance", "getStringOrSymbol", "craftEmvalAllocator", "emval_get_global", "emval_lookupTypes", "emval_allocateDestructors", "emval_addMethodCaller" ];
 
 missingLibrarySymbols.forEach(missingLibrarySymbol);
 
-var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "addOnExit", "addOnPostRun", "addRunDependency", "removeRunDependency", "FS_createFolder", "FS_createPath", "FS_createDataFile", "FS_createLazyFile", "FS_createLink", "FS_createDevice", "FS_unlink", "out", "err", "callMain", "abort", "keepRuntimeAlive", "wasmMemory", "wasmTable", "wasmExports", "stackAlloc", "stackSave", "stackRestore", "getTempRet0", "setTempRet0", "writeStackCookie", "checkStackCookie", "MAX_INT53", "MIN_INT53", "bigintToI53Checked", "ptrToString", "getHeapMax", "growMemory", "ENV", "setStackLimits", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "ERRNO_CODES", "ERRNO_MESSAGES", "DNS", "Protocols", "Sockets", "timers", "warnOnce", "UNWIND_CACHE", "readEmAsmArgsArray", "handleAllocatorInit", "HandleAllocator", "freeTableIndexes", "functionsInTableMap", "unSign", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "UTF8ToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "stringToUTF8OnStack", "JSEvents", "specialHTMLTargets", "currentFullscreenStrategy", "restoreOldWindowedStyle", "demangle", "demangleAll", "jsStackTrace", "stackTrace", "ExitStatus", "flush_NO_FILESYSTEM", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "ExceptionInfo", "Browser", "wget", "SYSCALLS", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "emscripten_webgl_power_preferences", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "GLFW", "allocateUTF8", "allocateUTF8OnStack", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "heap32VectorToArray", "requireRegisteredType", "UnboundTypeError", "PureVirtualError", "init_embind", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "extendError", "createNamedFunction", "embindRepr", "registeredInstances", "getBasestPointer", "getInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "registeredPointers", "registerType", "getShiftFromSize", "integerReadValueFromPointer", "enumReadValueFromPointer", "floatReadValueFromPointer", "simpleReadValueFromPointer", "runDestructors", "newFunc", "craftInvokerFunction", "embind__requireFunction", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_getPointee", "RegisteredPointer_destructor", "RegisteredPointer_deleteObject", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "finalizationRegistry", "detachFinalizer_deps", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "ClassHandle_isAliasOf", "throwInstanceAlreadyDeleted", "ClassHandle_clone", "ClassHandle_delete", "deletionQueue", "ClassHandle_isDeleted", "ClassHandle_deleteLater", "flushPendingDeletes", "delayFunction", "setDelayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "validateThis", "char_0", "char_9", "makeLegalFunctionName", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_newers", "emval_methodCallers", "emval_registeredMethods" ];
+var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "addOnExit", "addOnPostRun", "addRunDependency", "removeRunDependency", "FS_createFolder", "FS_createPath", "FS_createDataFile", "FS_createLazyFile", "FS_createLink", "FS_createDevice", "FS_unlink", "out", "err", "callMain", "abort", "keepRuntimeAlive", "wasmMemory", "wasmTable", "wasmExports", "stackAlloc", "stackSave", "stackRestore", "getTempRet0", "setTempRet0", "writeStackCookie", "checkStackCookie", "MAX_INT53", "MIN_INT53", "bigintToI53Checked", "ptrToString", "getHeapMax", "growMemory", "ENV", "setStackLimits", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "ERRNO_CODES", "ERRNO_MESSAGES", "DNS", "Protocols", "Sockets", "timers", "warnOnce", "UNWIND_CACHE", "readEmAsmArgsArray", "handleAllocatorInit", "HandleAllocator", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "freeTableIndexes", "functionsInTableMap", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "unSign", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "UTF8ToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "stringToUTF8OnStack", "JSEvents", "specialHTMLTargets", "currentFullscreenStrategy", "restoreOldWindowedStyle", "demangle", "demangleAll", "jsStackTrace", "stackTrace", "ExitStatus", "flush_NO_FILESYSTEM", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "ExceptionInfo", "Browser", "wget", "SYSCALLS", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "emscripten_webgl_power_preferences", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "GLFW", "allocateUTF8", "allocateUTF8OnStack", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "heap32VectorToArray", "requireRegisteredType", "UnboundTypeError", "PureVirtualError", "init_embind", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "extendError", "createNamedFunction", "embindRepr", "registeredInstances", "getBasestPointer", "getInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "registeredPointers", "registerType", "getShiftFromSize", "integerReadValueFromPointer", "enumReadValueFromPointer", "floatReadValueFromPointer", "simpleReadValueFromPointer", "runDestructors", "newFunc", "craftInvokerFunction", "embind__requireFunction", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_getPointee", "RegisteredPointer_destructor", "RegisteredPointer_deleteObject", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "finalizationRegistry", "detachFinalizer_deps", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "ClassHandle_isAliasOf", "throwInstanceAlreadyDeleted", "ClassHandle_clone", "ClassHandle_delete", "deletionQueue", "ClassHandle_isDeleted", "ClassHandle_deleteLater", "flushPendingDeletes", "delayFunction", "setDelayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "validateThis", "char_0", "char_9", "makeLegalFunctionName", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_newers", "emval_methodCallers", "emval_registeredMethods" ];
 
 unexportedSymbols.forEach(unexportedRuntimeSymbol);
 
