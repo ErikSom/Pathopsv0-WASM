@@ -12,92 +12,22 @@
 
     PathopsV0Factory().then((PathopsV0) => {
         console.log('PathopsV0:', PathopsV0);
-        // Initialize canvas
-        initCanvas(500, 500);
 
-        // Define constants like in the test interface
-        const lineType = PathopsV0.CurveType.line;
-        const quadType = PathopsV0.CurveType.quad;
-        const lineSize = 32;  // sizeof(OpPoint) * 2
-        const quadSize = 48;  // sizeof(OpPoint) * 3
+        const {Path2D, PathOps} = PathopsV0;
 
-        // Create context with empty AddContext
-        const addContext = new PathopsV0.AddContext();
-        addContext.setData(0);
-        addContext.size = 0;
-        const context = PathopsV0.CreateContext(addContext);
+        const pathA = new Path2D();
+        pathA.moveTo(0, 0);
+        pathA.lineTo(100, 100);
+        pathA.lineTo(100, 0);
+        pathA.quadraticCurveTo(100, 100, 200, 0);
+        pathA.closePath();
 
-        let pointsBuffer, windingBuffer;
-
-        try {
-            // Create AddContour for CreateContour
-            const addContour = new PathopsV0.AddContour();
-            addContour.setContext(context);
-            addContour.setData(0);
-            addContour.size = 0;
-
-            // Create contour
-            const contour = PathopsV0.CreateContour(addContour);
-            console.log('Created contour:', contour);
-            // Define your points array
-            const contour1 = [
-                { x: 2, y: 0 }, { x: 1, y: 2 }, { x: 0, y: 2 },  // quad
-                { x: 1, y: 2 }, { x: 2, y: 3 },                   // line
-                { x: 2, y: 0 }                                    // line
-            ];
-
-            const quadPoints = contour1.slice(0, 3);
-
-            // Allocate memory for the points
-            const numPoints = quadPoints.length;
-            const pointSize = 8; // Each OpPoint has 2 floats (x and y), 4 bytes each
-            pointsBuffer = PathopsV0._malloc(numPoints * pointSize);
-
-            // Create a Float32Array view into the allocated memory
-            const pointsHeapView = new Float32Array(PathopsV0.HEAPF32.buffer, pointsBuffer, numPoints * 2);
-
-            // Copy the point data into the heap
-            for (let i = 0; i < numPoints; i++) {
-                pointsHeapView[i * 2] = quadPoints[i].x;
-                pointsHeapView[i * 2 + 1] = quadPoints[i].y;
-            }
-
-            // Create AddCurve and set the pointer
-            const curve = new PathopsV0.AddCurve();
-            curve.setPoints(pointsBuffer); // Set the pointer to the points data
-            curve.size = numPoints; // **Set the size in bytes**
-            curve.type = PathopsV0.CurveType.quad;
-
-            // Allocate memory for windings
-            const windingsArray = [1]; // Your windings
-            const numWindings = windingsArray.length;
-            const windingsBuffer = PathopsV0._malloc(numWindings * 4); // Each int is 4 bytes
-
-            // Create an Int32Array view into the allocated memory
-            const windingsHeapView = new Int32Array(PathopsV0.HEAP32.buffer, windingsBuffer, numWindings);
-
-            // Copy the winding data into the heap
-            for (let i = 0; i < numWindings; i++) {
-                windingsHeapView[i] = windingsArray[i];
-            }
-
-            // Create AddWinding and set the pointer
-            const winding = new PathopsV0.AddWinding();
-            winding.setContour(contour);
-            winding.setWindings(windingsBuffer); // Set the pointer to the windings data
-            winding.size = 1;      // **Set the size in bytes**
-                        // Call AddQuads
-            PathopsV0.AddQuads(curve, winding);
-
-        } catch (error) {
-            console.error('Error:', error, error.stack);
-        } finally {
-            // Clean up WASM memory
-            if (pointsBuffer) PathopsV0._free(pointsBuffer);
-            if (windingBuffer) PathopsV0._free(windingBuffer);
-            // Clean up context
-            PathopsV0.DeleteContext(context);
-        }
+        const pathB = new Path2D();
+        pathB.moveTo(0, 0);
+        pathB.lineTo(50, 50);
+        pathB.lineTo(50, 0);
+        pathB.quadraticCurveTo(50, 50, 100, 0);
+        pathB.closePath();
     });
     </script>
 </body>
