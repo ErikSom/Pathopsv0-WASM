@@ -17,5 +17,5 @@ class_<Path>("Path2D")
 .function("toSVG", &Path::toSVG);
 
 class_<PathOps>("PathOps")
-.function("intersect", &PathOps::Intersect, return_value_policy::reference());
+.class_function("intersect", &PathOps::Intersect, return_value_policy::reference());
 }

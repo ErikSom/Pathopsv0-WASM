@@ -28,6 +28,11 @@
         pathB.lineTo(50, 0);
         pathB.quadraticCurveTo(50, 50, 100, 0);
         pathB.closePath();
+
+        const pathC = PathOps.intersect(pathA, pathB)
+
+        console.log(pathC.toCommands()); // [["M", 0, 0], ["L", 50, 50], ["L", 50, 0], ["L", 100, 0], ["Z"]]
+        console.log(pathC.toSVG()); // "M0 0 L50 50 L50 0 L100 0 Z"
     });
     </script>
 </body>
