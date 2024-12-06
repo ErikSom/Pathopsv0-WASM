@@ -35,7 +35,8 @@ emcc $FLAGS -s EXPORT_ES6=1 -s NO_FILESYSTEM=1 -s ENVIRONMENT='web' -s MODULARIZ
     ./pathopsv0/PathOps.cpp ./pathopsv0/src/*.cpp ./pathopsv0/debug/OpDebug.cpp ./pathopsv0/emscripten/Path2D.cpp ./pathopsv0-wasm/bindings.cpp \
     -o pathopsv0-wasm/dist/es/pathops.js \
     -s EXPORT_NAME="PathOps" \
-    --bind
+    --bind \
+    --post-js pathopsv0-wasm/utils-stub.js
 
 # # build UMD
 # echo "Building UMD"
