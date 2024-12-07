@@ -1,46 +1,55 @@
-function DrawPath(ctx, path, color = 'black') {
-	const commands = path.toCommands();
-	const commandsFixed = commands.replace(/" (\d)/g, '", $1');
-	const commandsArr = JSON.parse(commandsFixed);
+const types = {
+    move: 0,
+    line: 1,
+    quad: 2,
+    cubic: 3,
+    close: 4
+}
 
-	ctx.strokeStyle = color;
+function DrawPath(ctx, path, color = 'black') {
+    const commands = path.toCommands();
+
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2;
 
-	ctx.beginPath();
+    ctx.beginPath();
 
     let isFirstCommand = true;
 
-    for (let command of commandsArr) {
-        const [type, ...params] = command;
+    for(let i = 0; i < commands.size(); i++) {
+        const { type: { value: type }, data } = commands.get(i);
 
-        if (isFirstCommand && type === 'L') {
-            ctx.moveTo(params[0], params[1]);
+        if (isFirstCommand && type === types.line) {
+            ctx.moveTo(data.get(0), data.get(1));
             isFirstCommand = false;
             continue;
         }
 
         switch (type) {
-            case 'M':
-                ctx.moveTo(params[0], params[1]);
+            case types.move:
+                ctx.moveTo(data.get(0), data.get(1));
                 break;
-            case 'L':
-                ctx.lineTo(params[0], params[1]);
+            case types.line:
+                ctx.lineTo(data.get(0), data.get(1));
                 break;
-            case 'Q':
+            case types.quad:
                 ctx.quadraticCurveTo(
-                    params[0], params[1],
-                    params[2], params[3]
+                    data.get(0), data.get(1),
+                    data.get(2), data.get(3)
                 );
                 break;
-            case 'Z':
+            case types.cubic:
+                ctx.bezierCurveTo(
+                    data.get(0), data.get(1),
+                    data.get(2), data.get(3),
+                    data.get(4), data.get
+                );
+                break;
+            case types.close:
                 ctx.closePath();
                 break;
         }
-        isFirstCommand = false;
     }
-
     ctx.stroke();
 }
 Module["DrawPath"] = DrawPath;
-
-

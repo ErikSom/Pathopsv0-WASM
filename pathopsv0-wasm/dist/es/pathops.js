@@ -2567,6 +2567,65 @@ invokerSignature, rawInvoker, context, isPureVirtual, isAsync, isNonnullReturn) 
   });
 };
 
+var validateThis = (this_, classType, humanName) => {
+  if (!(this_ instanceof Object)) {
+    throwBindingError(`${humanName} with invalid "this": ${this_}`);
+  }
+  if (!(this_ instanceof classType.registeredClass.constructor)) {
+    throwBindingError(`${humanName} incompatible with "this" of type ${this_.constructor.name}`);
+  }
+  if (!this_.$$.ptr) {
+    throwBindingError(`cannot call emscripten binding method ${humanName} on deleted object`);
+  }
+  // todo: kill this
+  return upcastPointer(this_.$$.ptr, this_.$$.ptrType.registeredClass, classType.registeredClass);
+};
+
+var __embind_register_class_property = (classType, fieldName, getterReturnType, getterSignature, getter, getterContext, setterArgumentType, setterSignature, setter, setterContext) => {
+  fieldName = readLatin1String(fieldName);
+  getter = embind__requireFunction(getterSignature, getter);
+  whenDependentTypesAreResolved([], [ classType ], classType => {
+    classType = classType[0];
+    var humanName = `${classType.name}.${fieldName}`;
+    var desc = {
+      get() {
+        throwUnboundTypeError(`Cannot access ${humanName} due to unbound types`, [ getterReturnType, setterArgumentType ]);
+      },
+      enumerable: true,
+      configurable: true
+    };
+    if (setter) {
+      desc.set = () => throwUnboundTypeError(`Cannot access ${humanName} due to unbound types`, [ getterReturnType, setterArgumentType ]);
+    } else {
+      desc.set = v => throwBindingError(humanName + " is a read-only property");
+    }
+    Object.defineProperty(classType.registeredClass.instancePrototype, fieldName, desc);
+    whenDependentTypesAreResolved([], (setter ? [ getterReturnType, setterArgumentType ] : [ getterReturnType ]), types => {
+      var getterReturnType = types[0];
+      var desc = {
+        get() {
+          var ptr = validateThis(this, classType, humanName + " getter");
+          return getterReturnType["fromWireType"](getter(getterContext, ptr));
+        },
+        enumerable: true
+      };
+      if (setter) {
+        setter = embind__requireFunction(setterSignature, setter);
+        var setterArgumentType = types[1];
+        desc.set = function(v) {
+          var ptr = validateThis(this, classType, humanName + " setter");
+          var destructors = [];
+          setter(setterContext, ptr, setterArgumentType["toWireType"](destructors, v));
+          runDestructors(destructors);
+        };
+      }
+      Object.defineProperty(classType.registeredClass.instancePrototype, fieldName, desc);
+      return [];
+    });
+    return [];
+  });
+};
+
 var emval_freelist = [];
 
 var emval_handles = [];
@@ -2639,6 +2698,76 @@ var EmValType = {
 // TODO: do we need a deleteObject here?  write a test where
 // emval is passed into JS via an interface
 var __embind_register_emval = rawType => registerType(rawType, EmValType);
+
+var enumReadValueFromPointer = (name, width, signed) => {
+  switch (width) {
+   case 1:
+    return signed ? function(pointer) {
+      return this["fromWireType"](SAFE_HEAP_LOAD(pointer, 1, 0));
+    } : function(pointer) {
+      return this["fromWireType"](SAFE_HEAP_LOAD(pointer, 1, 1));
+    };
+
+   case 2:
+    return signed ? function(pointer) {
+      return this["fromWireType"](SAFE_HEAP_LOAD(((pointer) >> 1) * 2, 2, 0));
+    } : function(pointer) {
+      return this["fromWireType"](SAFE_HEAP_LOAD(((pointer) >> 1) * 2, 2, 1));
+    };
+
+   case 4:
+    return signed ? function(pointer) {
+      return this["fromWireType"](SAFE_HEAP_LOAD(((pointer) >> 2) * 4, 4, 0));
+    } : function(pointer) {
+      return this["fromWireType"](SAFE_HEAP_LOAD(((pointer) >> 2) * 4, 4, 1));
+    };
+
+   default:
+    throw new TypeError(`invalid integer width (${width}): ${name}`);
+  }
+};
+
+/** @suppress {globalThis} */ var __embind_register_enum = (rawType, name, size, isSigned) => {
+  name = readLatin1String(name);
+  function ctor() {}
+  ctor.values = {};
+  registerType(rawType, {
+    name,
+    constructor: ctor,
+    "fromWireType": function(c) {
+      return this.constructor.values[c];
+    },
+    "toWireType": (destructors, c) => c.value,
+    argPackAdvance: GenericWireTypeSize,
+    "readValueFromPointer": enumReadValueFromPointer(name, size, isSigned),
+    destructorFunction: null
+  });
+  exposePublicSymbol(name, ctor);
+};
+
+var requireRegisteredType = (rawType, humanName) => {
+  var impl = registeredTypes[rawType];
+  if (undefined === impl) {
+    throwBindingError(`${humanName} has unknown type ${getTypeName(rawType)}`);
+  }
+  return impl;
+};
+
+var __embind_register_enum_value = (rawEnumType, name, enumValue) => {
+  var enumType = requireRegisteredType(rawEnumType, "enum");
+  name = readLatin1String(name);
+  var Enum = enumType.constructor;
+  var Value = Object.create(enumType.constructor.prototype, {
+    value: {
+      value: enumValue
+    },
+    constructor: {
+      value: createNamedFunction(`${enumType.name}_${name}`, function() {})
+    }
+  });
+  Enum.values[enumValue] = Value;
+  Enum[name] = Value;
+};
 
 var floatReadValueFromPointer = (name, width) => {
   switch (width) {
@@ -2739,6 +2868,14 @@ var __embind_register_memory_view = (rawType, dataTypeIndex, name) => {
   }, {
     ignoreDuplicateRegistrations: true
   });
+};
+
+var EmValOptionalType = Object.assign({
+  optional: true
+}, EmValType);
+
+var __embind_register_optional = (rawOptionalType, rawType) => {
+  registerType(rawOptionalType, EmValOptionalType);
 };
 
 var __embind_register_std_string = (rawType, name) => {
@@ -3023,6 +3160,12 @@ var __embind_register_void = (rawType, name) => {
     // TODO: assert if anything else is given?
     "toWireType": (destructors, o) => undefined
   });
+};
+
+var __emval_take_value = (type, arg) => {
+  type = requireRegisteredType(type, "_emval_take_value");
+  var v = type["readValueFromPointer"](arg);
+  return Emval.toHandle(v);
 };
 
 var getHeapMax = () => // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
@@ -3391,13 +3534,18 @@ var wasmImports = {
   /** @export */ _embind_register_class_class_function: __embind_register_class_class_function,
   /** @export */ _embind_register_class_constructor: __embind_register_class_constructor,
   /** @export */ _embind_register_class_function: __embind_register_class_function,
+  /** @export */ _embind_register_class_property: __embind_register_class_property,
   /** @export */ _embind_register_emval: __embind_register_emval,
+  /** @export */ _embind_register_enum: __embind_register_enum,
+  /** @export */ _embind_register_enum_value: __embind_register_enum_value,
   /** @export */ _embind_register_float: __embind_register_float,
   /** @export */ _embind_register_integer: __embind_register_integer,
   /** @export */ _embind_register_memory_view: __embind_register_memory_view,
+  /** @export */ _embind_register_optional: __embind_register_optional,
   /** @export */ _embind_register_std_string: __embind_register_std_string,
   /** @export */ _embind_register_std_wstring: __embind_register_std_wstring,
   /** @export */ _embind_register_void: __embind_register_void,
+  /** @export */ _emval_take_value: __emval_take_value,
   /** @export */ alignfault,
   /** @export */ emscripten_resize_heap: _emscripten_resize_heap,
   /** @export */ fd_close: _fd_close,
@@ -3446,11 +3594,11 @@ Module["addFunction"] = addFunction;
 
 Module["removeFunction"] = removeFunction;
 
-var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertI32PairToI53Checked", "convertU32PairToI53", "getTempRet0", "setTempRet0", "zeroMemory", "exitJS", "strError", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "emscriptenLog", "readEmAsmArgs", "jstoi_q", "getExecutableName", "listenOnce", "autoResumeAudioContext", "getDynCaller", "dynCall", "handleException", "keepRuntimeAlive", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "asmjsMangle", "asyncLoad", "mmapAlloc", "HandleAllocator", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "reallyNegative", "strLen", "reSign", "formatString", "intArrayFromString", "intArrayToString", "AsciiToString", "stringToAscii", "stringToNewUTF8", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "getCallstack", "convertPCtoSourceLocation", "getEnvStrings", "checkWasiClock", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "initRandomFill", "randomFill", "safeSetTimeout", "setImmediateWrapped", "safeRequestAnimationFrame", "clearImmediateWrapped", "polyfillSetImmediate", "registerPostMainLoop", "registerPreMainLoop", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "isLeapYear", "ydayFromDate", "arraySum", "addDays", "getSocketFromFD", "getSocketAddress", "heapObjectForWebGLType", "toTypedArrayIndex", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "webgl_enable_EXT_polygon_offset_clamp", "webgl_enable_EXT_clip_control", "webgl_enable_WEBGL_polygon_mode", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "setErrNo", "getFunctionArgsName", "requireRegisteredType", "createJsInvokerSignature", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "enumReadValueFromPointer", "setDelayFunction", "validateThis", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
+var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertI32PairToI53Checked", "convertU32PairToI53", "getTempRet0", "setTempRet0", "zeroMemory", "exitJS", "strError", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "emscriptenLog", "readEmAsmArgs", "jstoi_q", "getExecutableName", "listenOnce", "autoResumeAudioContext", "getDynCaller", "dynCall", "handleException", "keepRuntimeAlive", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "asmjsMangle", "asyncLoad", "mmapAlloc", "HandleAllocator", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "reallyNegative", "strLen", "reSign", "formatString", "intArrayFromString", "intArrayToString", "AsciiToString", "stringToAscii", "stringToNewUTF8", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "getCallstack", "convertPCtoSourceLocation", "getEnvStrings", "checkWasiClock", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "initRandomFill", "randomFill", "safeSetTimeout", "setImmediateWrapped", "safeRequestAnimationFrame", "clearImmediateWrapped", "polyfillSetImmediate", "registerPostMainLoop", "registerPreMainLoop", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "isLeapYear", "ydayFromDate", "arraySum", "addDays", "getSocketFromFD", "getSocketAddress", "heapObjectForWebGLType", "toTypedArrayIndex", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "webgl_enable_EXT_polygon_offset_clamp", "webgl_enable_EXT_clip_control", "webgl_enable_WEBGL_polygon_mode", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "setErrNo", "getFunctionArgsName", "createJsInvokerSignature", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "setDelayFunction", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
 
 missingLibrarySymbols.forEach(missingLibrarySymbol);
 
-var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "addOnExit", "addOnPostRun", "addRunDependency", "removeRunDependency", "out", "err", "callMain", "abort", "wasmMemory", "wasmExports", "writeStackCookie", "checkStackCookie", "INT53_MAX", "INT53_MIN", "bigintToI53Checked", "stackSave", "stackRestore", "stackAlloc", "ptrToString", "getHeapMax", "growMemory", "ENV", "setStackLimits", "ERRNO_CODES", "DNS", "Protocols", "Sockets", "timers", "warnOnce", "readEmAsmArgsArray", "jstoi_s", "alignMemory", "wasmTable", "noExitRuntime", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "freeTableIndexes", "functionsInTableMap", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "unSign", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "UTF8ToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "stringToUTF8OnStack", "JSEvents", "specialHTMLTargets", "findCanvasEventTarget", "currentFullscreenStrategy", "restoreOldWindowedStyle", "jsStackTrace", "UNWIND_CACHE", "ExitStatus", "flush_NO_FILESYSTEM", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "ExceptionInfo", "Browser", "getPreloadedImageData__data", "wget", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "SYSCALLS", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "allocateUTF8", "allocateUTF8OnStack", "demangle", "stackTrace", "print", "printErr", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "getFunctionName", "heap32VectorToArray", "usesDestructorStack", "checkArgCount", "getRequiredArgCount", "createJsInvoker", "UnboundTypeError", "PureVirtualError", "GenericWireTypeSize", "EmValType", "EmValOptionalType", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "extendError", "createNamedFunction", "embindRepr", "registeredInstances", "getBasestPointer", "getInheritedInstance", "registeredPointers", "registerType", "integerReadValueFromPointer", "floatReadValueFromPointer", "readPointer", "runDestructors", "newFunc", "craftInvokerFunction", "embind__requireFunction", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "finalizationRegistry", "detachFinalizer_deps", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "throwInstanceAlreadyDeleted", "deletionQueue", "flushPendingDeletes", "delayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "char_0", "char_9", "makeLegalFunctionName", "emval_freelist", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_methodCallers", "reflectConstruct" ];
+var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "addOnExit", "addOnPostRun", "addRunDependency", "removeRunDependency", "out", "err", "callMain", "abort", "wasmMemory", "wasmExports", "writeStackCookie", "checkStackCookie", "INT53_MAX", "INT53_MIN", "bigintToI53Checked", "stackSave", "stackRestore", "stackAlloc", "ptrToString", "getHeapMax", "growMemory", "ENV", "setStackLimits", "ERRNO_CODES", "DNS", "Protocols", "Sockets", "timers", "warnOnce", "readEmAsmArgsArray", "jstoi_s", "alignMemory", "wasmTable", "noExitRuntime", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "freeTableIndexes", "functionsInTableMap", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "unSign", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "UTF8ToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "stringToUTF8OnStack", "JSEvents", "specialHTMLTargets", "findCanvasEventTarget", "currentFullscreenStrategy", "restoreOldWindowedStyle", "jsStackTrace", "UNWIND_CACHE", "ExitStatus", "flush_NO_FILESYSTEM", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "ExceptionInfo", "Browser", "getPreloadedImageData__data", "wget", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "SYSCALLS", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "allocateUTF8", "allocateUTF8OnStack", "demangle", "stackTrace", "print", "printErr", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "getFunctionName", "heap32VectorToArray", "requireRegisteredType", "usesDestructorStack", "checkArgCount", "getRequiredArgCount", "createJsInvoker", "UnboundTypeError", "PureVirtualError", "GenericWireTypeSize", "EmValType", "EmValOptionalType", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "extendError", "createNamedFunction", "embindRepr", "registeredInstances", "getBasestPointer", "getInheritedInstance", "registeredPointers", "registerType", "integerReadValueFromPointer", "enumReadValueFromPointer", "floatReadValueFromPointer", "readPointer", "runDestructors", "newFunc", "craftInvokerFunction", "embind__requireFunction", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "finalizationRegistry", "detachFinalizer_deps", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "throwInstanceAlreadyDeleted", "deletionQueue", "flushPendingDeletes", "delayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "validateThis", "char_0", "char_9", "makeLegalFunctionName", "emval_freelist", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_methodCallers", "reflectConstruct" ];
 
 unexportedSymbols.forEach(unexportedRuntimeSymbol);
 
@@ -3547,47 +3695,56 @@ if (Module["preInit"]) {
 run();
 
 // end include: postamble.js
-// include: /Users/eriksombroek/_projects/cplusplus/pathopsv0-wasm/pathopsv0-wasm/helpers-stub.js
+// include: /Users/eriksombroek/_projects/cplusplus/pathopsv0-wasm/pathopsv0-wasm/utils-stub.js
+const types = {
+  move: 0,
+  line: 1,
+  quad: 2,
+  cubic: 3,
+  close: 4
+};
+
 function DrawPath(ctx, path, color = "black") {
   const commands = path.toCommands();
-  const commandsFixed = commands.replace(/" (\d)/g, '", $1');
-  const commandsArr = JSON.parse(commandsFixed);
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
   let isFirstCommand = true;
-  for (let command of commandsArr) {
-    const [type, ...params] = command;
-    if (isFirstCommand && type === "L") {
-      ctx.moveTo(params[0], params[1]);
+  for (let i = 0; i < commands.size(); i++) {
+    const {type: {value: type}, data} = commands.get(i);
+    if (isFirstCommand && type === types.line) {
+      ctx.moveTo(data.get(0), data.get(1));
       isFirstCommand = false;
       continue;
     }
     switch (type) {
-     case "M":
-      ctx.moveTo(params[0], params[1]);
+     case types.move:
+      ctx.moveTo(data.get(0), data.get(1));
       break;
 
-     case "L":
-      ctx.lineTo(params[0], params[1]);
+     case types.line:
+      ctx.lineTo(data.get(0), data.get(1));
       break;
 
-     case "Q":
-      ctx.quadraticCurveTo(params[0], params[1], params[2], params[3]);
+     case types.quad:
+      ctx.quadraticCurveTo(data.get(0), data.get(1), data.get(2), data.get(3));
       break;
 
-     case "Z":
+     case types.cubic:
+      ctx.bezierCurveTo(data.get(0), data.get(1), data.get(2), data.get(3), data.get(4), data.get);
+      break;
+
+     case types.close:
       ctx.closePath();
       break;
     }
-    isFirstCommand = false;
   }
   ctx.stroke();
 }
 
 Module["DrawPath"] = DrawPath;
 
-// end include: /Users/eriksombroek/_projects/cplusplus/pathopsv0-wasm/pathopsv0-wasm/helpers-stub.js
+// end include: /Users/eriksombroek/_projects/cplusplus/pathopsv0-wasm/pathopsv0-wasm/utils-stub.js
 // include: postamble_modularize.js
 // In MODULARIZE mode we wrap the generated code in a factory function
 // and return either the Module itself, or a promise of the module.
