@@ -4,24 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PathOpsV0 - ES6 - Complete Test</title>
-    <script src="../drawPath.js"></script>
+    <script src="../pathRenderer.js"></script>
 </head>
 <body>
     <script type="module">
     import PathopsV0Factory from '../../dist/es/pathops.js';
 
-    const canvas = document.createElement('canvas');
-    canvas.width = 400;
-    canvas.height = 400;
-    document.body.appendChild(canvas);
-    canvas.style.backgroundColor = '#f0f0f0';
-
-    const ctx = canvas.getContext('2d');
-
     PathopsV0Factory().then((PathopsV0) => {
-        console.log('PathopsV0:', PathopsV0);
 
-        const {Path2D, PathOps, DrawPath} = PathopsV0;
+        PathRenderer.init(500, 500, '#f0f0f0');
+        PathRenderer.translate(100, 100);
+        PathRenderer.drawGrid();
+
+        const {Path2D, PathOps} = PathopsV0;
 
         const pathA = new Path2D();
         pathA.moveTo(0, 0);
@@ -30,28 +25,25 @@
         pathA.quadraticCurveTo(100, 100, 200, 0);
         pathA.closePath();
 
-        DrawPath(ctx, pathA, 'green');
+        PathRenderer.drawPath(pathA, {fill: 'green', label: 'Path A'});
+
+        const offset = {
+            x: 50,
+            y: 50
+        }
 
         const pathB = new Path2D();
-        pathB.moveTo(0, 0);
-        pathB.lineTo(50, 50);
-        pathB.lineTo(50, 0);
-        pathB.quadraticCurveTo(50, 50, 100, 0);
+        pathB.moveTo(offset.x + 0, offset.y + 0);
+        pathB.lineTo(offset.x + 50, offset.y + 50);
+        pathB.lineTo(offset.x + 50, offset.y + 0);
+        pathB.quadraticCurveTo(offset.x + 50, offset.y + 50, offset.x + 100, offset.y + 0);
         pathB.closePath();
 
-        DrawPath(ctx, pathA, 'blue');
-
-
-        console.log('pathA:', pathA.toCommands());
-        console.log('pathB:', pathB.toCommands());
+        PathRenderer.drawPath(pathB, {fill: 'blue', label: 'Path B'});
 
         const pathC = PathOps.intersect(pathA, pathB);
-        console.log(pathC.toCommands());
 
-        console.log('pathA:', pathA.toCommands());
-        console.log('pathB:', pathB.toCommands());
-
-        DrawPath(ctx, pathC, 'red');
+        PathRenderer.drawPath(pathC, {fill: 'red', label: 'Path C'});
     });
     </script>
 </body>
