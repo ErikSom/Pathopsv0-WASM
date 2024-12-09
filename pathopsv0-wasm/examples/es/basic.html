@@ -16,9 +16,9 @@
         PathRenderer.translate(100, 100);
         PathRenderer.drawGrid();
 
-        const {Path2D, PathOps} = PathopsV0;
+        const {FillPath2D, PathOps} = PathopsV0;
 
-        const pathA = new Path2D();
+        const pathA = new FillPath2D();
         pathA.moveTo(0, 0);
         pathA.lineTo(100, 100);
         pathA.lineTo(100, 0);
@@ -32,7 +32,7 @@
             y: 50
         }
 
-        const pathB = new Path2D();
+        const pathB = new FillPath2D();
         pathB.moveTo(offset.x + 0, offset.y + 0);
         pathB.lineTo(offset.x + 50, offset.y + 50);
         pathB.lineTo(offset.x + 50, offset.y + 0);

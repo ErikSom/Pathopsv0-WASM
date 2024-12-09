@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -55,7 +55,7 @@
 
     PathopsV0Factory().then((PathopsV0) => {
         console.log('PathopsV0:', PathopsV0);
-        const {FillPath2D, PathOps, DrawPath} = PathopsV0;
+        const {FillPath2D, FramePath2D, PathOps, DrawPath} = PathopsV0;
 
         var path = new FillPath2D();
         path.moveTo(1, 2);
@@ -84,14 +84,16 @@
         console.log(s2);
         if (svg != s2) console.log('failed');
 
-        path.intersect(path2);
+        var error = path.intersect(path2);
         console.log("path:", path.toSVG());
+        console.log("error:", error.value);
         path.fromSVG("M1 0 Q2 0 2 1 Q2 2 1 2 Q0 2 0 1 Q0 0 1 0");
         console.log("path:", path.toSVG());
         path2.fromSVG("L2 2 L0 2 Z");
         console.log("path2:", path2.toSVG());
-        path.intersect(path2);
+        error = path.intersect(path2);
         console.log("path:", path.toSVG());
+        console.log("error:", error.value);
         path.fromSVG("m0 0 1 1 2 2 3 3");
         console.log("path:", path.toSVG());
         commands = path.toCommands();
@@ -160,7 +162,7 @@
         svg = path.toSVG();
         if (svg != "M 106 137 L 166 227 L 326 427 L 266 337 L 106 137 Z") console.log('failed');
 
-        // op tests
+        // fill tests
         path.clear();
         path.rect(0, 0, 4, 4);
         path2.clear();
@@ -176,6 +178,24 @@
         path.simplify();
         svg = path.toSVG();
         if (svg != "M 0 0 L 6 0 L 6 4 L 0 4 L 0 0 Z") console.log('failed');
+
+        // frame tests
+        var frame = new FramePath2D();
+        frame.moveTo(10, 10);
+        frame.rLineTo(10, 10);
+        frame.rMoveTo(10, 10);
+        frame.rQuadraticCurveTo(10, 0, 20, 20);
+        path.clear();
+        path.rect(15, 15, 30, 30);
+        var result = frame.clone();
+        result.intersect(path);
+        svg = result.toSVG();
+        if (svg != "M 30 30 Q 37.5 30 45 41.25 Z M 15 15 L 20 20 Z") console.log('failed');
+
+        result = frame.clone();
+        result.difference(path);
+        svg = result.toSVG();
+        if (svg != "M 45 41.25 Q 47.5 45 50 50 Z M 10 10 L 15 15 Z") console.log('failed');
     });</script>
 </body>
 </html>
