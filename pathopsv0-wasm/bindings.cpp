@@ -21,7 +21,6 @@ enum_<PathOpsV0Lib::ContextError>("OpError")
 .value("finite", PathOpsV0Lib::ContextError::finite)
 .value("intersection", PathOpsV0Lib::ContextError::intersection)
 .value("missing", PathOpsV0Lib::ContextError::missing)
-.value("segmentBounds", PathOpsV0Lib::ContextError::segmentBounds)
 .value("toVertical", PathOpsV0Lib::ContextError::toVertical)
 .value("tree", PathOpsV0Lib::ContextError::tree);
 
