@@ -26,7 +26,7 @@ PathopsV0Factory().then((PathopsV0) => {
     let bType = 0;
     requestAnimationFrame(drawCanvas);
 
-    canvas.addEventListener('mousedown', (event) => {
+    canvas.addEventListener('pointerdown', (event) => {
         const canvasBoundingRect = canvas.getBoundingClientRect();
         const scale = {
             x: canvas.width / canvasBoundingRect.width,
@@ -46,11 +46,11 @@ PathopsV0Factory().then((PathopsV0) => {
         }
     });
 
-    document.addEventListener('mouseup', (event) => {
+    document.addEventListener('pointerup', (event) => {
         endHit = -1;
     });
 
-    document.addEventListener('mousemove', (event) => {
+    document.addEventListener('pointermove', (event) => {
         if (endHit < 0)
             return;
         if (endHit < 4) {
@@ -80,6 +80,11 @@ PathopsV0Factory().then((PathopsV0) => {
         if (x > canvas.width - 15)
             bType = (bType + 1) % 4;
         requestAnimationFrame(drawCanvas);
+    });
+
+    document.addEventListener('keypress', (event) => {
+        if ('d' == event.key)
+            debug();
     });
 
     function check(pt, downX, downY) {
@@ -242,12 +247,9 @@ PathopsV0Factory().then((PathopsV0) => {
     function sect() {
         var frame = new FramePath2D();
         makeBezier(frame, false);
-        console.log(frame.toSVG());
         var fill = new FillPath2D();
         makeV0(fill);
-        console.log(fill.toSVG());
         frame.intersect(fill);
-        console.log(frame.toSVG());
         const commands = frame.toCommands();
         frame.delete();
         fill.delete();
@@ -258,21 +260,26 @@ PathopsV0Factory().then((PathopsV0) => {
             switch (type) {
                 case 0:
                     ctx.moveTo(data.get(0), data.get(1));
+                    lastPt = { x: data.get(0), y: data.get(1) };
                     break;
                 case 1:
                     ctx.lineTo(data.get(0), data.get(1));
+                    lastPt = { x: data.get(0), y: data.get(1) };
                     break;
                 case 2:
                     ctx.quadraticCurveTo(data.get(0), data.get(1), data.get(2), data.get(3));
+                    lastPt = { x: data.get(2), y: data.get(3) };
                     break;
                 case 3:
                     const conic = [lastPt, { x: data.get(3), y: data.get(4) }, 
                             { x: data.get(0), y: data.get(1), w: data.get(2)}];
                     conicHack(conic, 1);
+                    lastPt = { x: data.get(3), y: data.get(4) };
                     break;
                 case 4:
                     ctx.bezierCurveTo(data.get(0), data.get(1), data.get(2), data.get(3), 
                             data.get(4), data.get(5));
+                    lastPt = { x: data.get(4), y: data.get(5) };
                     break;
                 default:
                     ;
@@ -299,5 +306,21 @@ PathopsV0Factory().then((PathopsV0) => {
         ctx.textAlign = 'center';
         const bNames = ['line', 'quadratic', 'conic', 'cubic'];
         ctx.fillText(bNames[bType], canvas.width / 2, canvas.height - 10);
+    }
+
+    function debug() {
+        var frame = new FramePath2D();
+        makeBezier(frame, false);
+        console.log("static void test() {");
+        console.log('    const char* frame = "' + frame.toSVG() + '";');
+        var fill = new FillPath2D();
+        makeV0(fill);
+        console.log('    const char* fill = "' + fill.toSVG() + '";');
+        frame.intersect(fill);
+        console.log('    const char* sect = "' + frame.toSVG() + '";');
+        console.log("    svgFrameTest(frame, fill, sect);");
+        console.log("}");
+        frame.delete();
+        fill.delete();
     }
 });

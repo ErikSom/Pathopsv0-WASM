@@ -23,7 +23,7 @@ PathopsV0Factory().then((PathopsV0) => {
     ctx.font = "16px Arial";
     requestAnimationFrame(drawCanvas);
 
-    canvas.addEventListener('mousedown', (event) => {
+    canvas.addEventListener('pointerdown', (event) => {
         const canvasBoundingRect = canvas.getBoundingClientRect();
         const scale = {
             x: canvas.width / canvasBoundingRect.width,
@@ -41,11 +41,11 @@ PathopsV0Factory().then((PathopsV0) => {
             endHit = -1;
     });
 
-    document.addEventListener('mouseup', (event) => {
+    document.addEventListener('pointerup', (event) => {
         endHit = -1;
     });
 
-    document.addEventListener('mousemove', (event) => {
+    document.addEventListener('pointermove', (event) => {
         if (endHit < 0)
             return;
         moveX += event.movementX;
