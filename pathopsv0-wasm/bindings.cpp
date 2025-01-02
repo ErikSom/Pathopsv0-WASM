@@ -12,6 +12,7 @@ enum_<Types>("CurveType")
 .value("move", Types::move)
 .value("line", Types::line)
 .value("quad", Types::quad)
+.value("conic", Types::conic)
 .value("cubic", Types::cubic)
 .value("close", Types::close);
 
@@ -54,6 +55,8 @@ class_<FillPath>("FillPath2D")
 .function("rLineTo", &FillPath::rLineTo)
 .function("quadraticCurveTo", &FillPath::quadraticCurveTo)
 .function("rQuadraticCurveTo", &FillPath::rQuadraticCurveTo)
+.function("conicTo", &FillPath::conicTo)
+.function("rConicTo", &FillPath::rConicTo)
 .function("bezierCurveTo", &FillPath::bezierCurveTo)
 .function("rBezierCurveTo", &FillPath::rBezierCurveTo)
 .function("closePath", &FillPath::closePath)
@@ -86,6 +89,8 @@ class_<FramePath>("FramePath2D")
 .function("rLineTo", &FramePath::rLineTo)
 .function("quadraticCurveTo", &FramePath::quadraticCurveTo)
 .function("rQuadraticCurveTo", &FramePath::rQuadraticCurveTo)
+.function("conicTo", &FramePath::conicTo)
+.function("rConicTo", &FramePath::rConicTo)
 .function("bezierCurveTo", &FramePath::bezierCurveTo)
 .function("rBezierCurveTo", &FramePath::rBezierCurveTo)
 .function("closePath", &FramePath::closePath)
@@ -99,9 +104,45 @@ class_<FramePath>("FramePath2D")
 .function("toSVG", &FramePath::toSVG);
 
 class_<PathOps>("PathOps")
-    .class_function("intersect", optional_override([](FillPath& left, FillPath& right) {
-        FillPath result = left;
-        result.opCommon(right, Ops::sect);
-        return result;
-    }));
+.class_function("difference", optional_override([](FillPath& left, FillPath& right) {
+    FillPath result = left;
+    result.opCommon(right, Ops::diff);
+    return result;
+}))
+.class_function("intersect", optional_override([](FillPath& left, FillPath& right) {
+    FillPath result = left;
+    result.opCommon(right, Ops::sect);
+    return result;
+}))
+.class_function("reverseDifference", optional_override([](FillPath& left, FillPath& right) {
+    FillPath result = left;
+    result.opCommon(right, Ops::revDiff);
+    return result;
+}))
+.class_function("union", optional_override([](FillPath& left, FillPath& right) {
+    FillPath result = left;
+    result.opCommon(right, Ops::_union);
+    return result;
+}))
+.class_function("xor", optional_override([](FillPath& left, FillPath& right) {
+    FillPath result = left;
+    result.opCommon(right, Ops::_xor);
+    return result;
+}))
+.class_function("simplify", optional_override([](FillPath& left) {
+    FillPath result = left;
+    result.simplify();
+    return result;
+}))
+.class_function("frameDifference", optional_override([](FramePath& left, FillPath& right) {
+    FramePath result = left;
+    result.opCommon(right, Ops::diff);
+    return result;
+}))
+.class_function("frameIntersect", optional_override([](FramePath& left, FillPath& right) {
+    FramePath result = left;
+    result.opCommon(right, Ops::sect);
+    return result;
+}));
+
 }
