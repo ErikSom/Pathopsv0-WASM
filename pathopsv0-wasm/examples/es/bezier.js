@@ -77,11 +77,12 @@ PathopsV0Factory().then((PathopsV0) => {
         requestAnimationFrame(drawCanvas);
     });
 
-    document.addEventListener('click', (event) => {
+    document.addEventListener('touchstart', (event) => {
         lastDown = event.target;
-    });
+    }, { passive: false });
 
-    canvas.addEventListener('click', (event) => {
+
+    function commonClick(event) {
         lastDown = canvas;
         event.preventDefault();
         event.stopPropagation();
@@ -90,8 +91,11 @@ PathopsV0Factory().then((PathopsV0) => {
             x: canvas.width / canvasBoundingRect.width,
             y: canvas.height / canvasBoundingRect.height,
         };
-        const x = (event.clientX - canvasBoundingRect.left) * scale.x;
-        const y = (event.clientY - canvasBoundingRect.top) * scale.y;
+        const isClick = event.type == "click";
+        var x = isClick ? event.clientX : event.targetTouches[0].clientX;
+        var y = isClick ? event.clientY : event.targetTouches[0].clientY;
+        var x = (x - canvasBoundingRect.left) * scale.x;
+        var y = (y - canvasBoundingRect.top) * scale.y;
         if (y < canvas.height - 25)
             return;
         if (x < 15)
@@ -99,6 +103,14 @@ PathopsV0Factory().then((PathopsV0) => {
         if (x > canvas.width - 15)
             bType = (bType + 1) % 4;
         requestAnimationFrame(drawCanvas);
+    }
+
+    canvas.addEventListener('touchstart', (event) => {
+        commonClick(event);
+    }, { passive: false });
+
+    canvas.addEventListener('click', (event) => {
+        commonClick(event);
     });
 
     canvas.addEventListener('dblclick', (event) => {
@@ -110,10 +122,6 @@ PathopsV0Factory().then((PathopsV0) => {
         if (lastDown == canvas && 'd' == event.key)
             debug();
     });
-
-    canvas.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-    }, { passive: false });
 
     canvas.addEventListener('touchmove', (e) => {
         e.preventDefault();
