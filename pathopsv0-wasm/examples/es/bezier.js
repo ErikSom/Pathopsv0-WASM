@@ -7,6 +7,7 @@ PathopsV0Factory().then((PathopsV0) => {
     target.before(canvas);
     canvas.width = 400;
     canvas.height = 200;
+    canvas.style.touchAction = 'none';
     const ctx = canvas.getContext('2d');
     const leftTriangle = [0, 10, 10, 0, 10, 20],
         rightTriangle = [0, 0, 10, 10, 0, 20],
@@ -24,9 +25,18 @@ PathopsV0Factory().then((PathopsV0) => {
     let ctrlW = pts[2].w;
     let endHit = -1;
     let bType = 0;
+    var lastDown = document;
+
     requestAnimationFrame(drawCanvas);
 
+    document.addEventListener('pointerdown', (event) => {
+        lastDown = event.target;
+    });
+
     canvas.addEventListener('pointerdown', (event) => {
+        lastDown = canvas;
+        event.preventDefault();
+        event.stopPropagation();
         const canvasBoundingRect = canvas.getBoundingClientRect();
         const scale = {
             x: canvas.width / canvasBoundingRect.width,
@@ -53,6 +63,8 @@ PathopsV0Factory().then((PathopsV0) => {
     document.addEventListener('pointermove', (event) => {
         if (endHit < 0)
             return;
+        event.preventDefault();
+        event.stopPropagation();
         if (endHit < 4) {
             pts[endHit].x += event.movementX;
             pts[endHit].y += event.movementY;
@@ -65,7 +77,14 @@ PathopsV0Factory().then((PathopsV0) => {
         requestAnimationFrame(drawCanvas);
     });
 
+    document.addEventListener('click', (event) => {
+        lastDown = event.target;
+    });
+
     canvas.addEventListener('click', (event) => {
+        lastDown = canvas;
+        event.preventDefault();
+        event.stopPropagation();
         const canvasBoundingRect = canvas.getBoundingClientRect();
         const scale = {
             x: canvas.width / canvasBoundingRect.width,
@@ -82,10 +101,23 @@ PathopsV0Factory().then((PathopsV0) => {
         requestAnimationFrame(drawCanvas);
     });
 
+    canvas.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+    });
+
     document.addEventListener('keypress', (event) => {
-        if ('d' == event.key)
+        if (lastDown == canvas && 'd' == event.key)
             debug();
     });
+
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+    }, { passive: false });
 
     function check(pt, downX, downY) {
         return Math.abs(downY - pt.y) <= 8 && Math.abs(downX - pt.x) <= 8;
