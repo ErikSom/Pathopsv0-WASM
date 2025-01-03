@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta charset='utf-8'>
+	<meta name='viewport' content='width=device-width,initial-scale=1'>
     <title>readme</title>
 	<style>
 	.c1 {
@@ -21,10 +21,7 @@
 	font-style: italic
 	}
 	body {
-	margin-left:50px;
-	margin-top:50px;
-	margin-right:50px;
-	margin-bottom:50px;
+	margin: 50px;
 	}
 	pre {
 	font-size: 1.2em;
@@ -40,6 +37,15 @@
 	}
 	a:hover {
 	text-decoration: underline;
+	}
+	canvas {
+		max-width: 100%;
+	}
+
+	@media only screen and (max-width: 500px) {
+		body {
+		margin: 10px;
+		}
 	}
 	</style>
 </head>
@@ -67,18 +73,18 @@ The engine finds the geometric intersections; computes the windings' sums; deter
 </p>
 
 <p>
-The separation between the engine and the caller permits supporting a wide variety of curve types. The engine design will intersect any curve with any other curve, without the caller providing specific intersection functions. The separation of winding and winding rules allow the caller to define operations outside of set operators, such as finding the path frame contained by an area fill, without modifying the engine. 
+The separation between the engine and the caller permits supporting a wide variety of curve types. The engine design will intersect any curve with any other curve, without the caller providing specific intersection functions. The separation of winding and winding rules allow the caller to define operations outside of set operators, such as finding the path frame contained by an area fill, without modifying the engine.
 </p>
 
 <p class="c1">Public Interfaces</p>
 
 <p>
 The public interface types are defined in <code>PathOpsTypes.h</code>.  <br>
-The public functions are defined in  <code>PathOps.h</code>. 
+The public functions are defined in  <code>PathOps.h</code>.
 </p>
 
 <p>
-Most of the public interfaces are abstract; the public interfaces do not reveal the functions or data in the implementation. This is by design, to keep the engine agnostic to the system graphics that defines the drawn geometry. 
+Most of the public interfaces are abstract; the public interfaces do not reveal the functions or data in the implementation. This is by design, to keep the engine agnostic to the system graphics that defines the drawn geometry.
 </p>
 
 <p>
@@ -92,20 +98,20 @@ OpMath.h defines these C++ structs (among others), briefly summarized below:
 </p>
 
 <pre>
-struct OpPoint {  
-  float x, y;  
+struct OpPoint {
+  float x, y;
 }
 
-struct OpVector {  
-  float dx, dy;  
+struct OpVector {
+  float dx, dy;
 }
 
-struct OpRect {  
-  float left, top, right, bottom;  
+struct OpRect {
+  float left, top, right, bottom;
 }
 
-struct OpRoots {  
-  std::vector&lt;float&gt; roots;  
+struct OpRoots {
+  std::vector&lt;float&gt; roots;
 }
 </pre>
 
@@ -114,10 +120,10 @@ note to self: actual structs are more complicated. Create public versions that a
 </p>
 
 <p>
-These simplified versions illustrate the common ground between the caller and the engine:  
-<br>- The caller's geometry must include two <code>OpPoint</code> values; the curve's endpoints.  
-<br>- The caller's geometric rules must compute the tangent along the curve, as an <code>OpVector</code> value.  
-<br>- The bounding box of the curve: <code>OpRect</code>, must be the same as the extremes of the endpoints.  
+These simplified versions illustrate the common ground between the caller and the engine:
+<br>- The caller's geometry must include two <code>OpPoint</code> values; the curve's endpoints.
+<br>- The caller's geometric rules must compute the tangent along the curve, as an <code>OpVector</code> value.
+<br>- The bounding box of the curve: <code>OpRect</code>, must be the same as the extremes of the endpoints.
 <br>- The caller's geometric rules must compute the curves' parametric roots: <code>OpRoots</code>.
 </p>
 <script type="module" id="tangent" src="tangent.js"></script>
@@ -129,7 +135,6 @@ The entries in the curves directory provide rules for lines, and for common Bezi
 <code>curve/CubicBezier.h</code>  provides rules for cubic Beziers <br>
 </p>
 <script type="module" id="bezier" src="bezier.js"></script>
-<p>
 
 <p>
 Note that <code>curve/Line.h</code> is practically empty. The engine provides default implementations for geometric rules, when possible; lines use those defaults for its implementation.
@@ -167,10 +172,10 @@ struct CurveUserData;
 </pre>
 
 <pre id="CurveData">
-struct CurveData {  
-	OpPoint start;  
-	OpPoint end;  
-  	CurveUserData optionalAdditionalData;  
+struct CurveData {
+	OpPoint start;
+	OpPoint end;
+  	CurveUserData optionalAdditionalData;
 }
 </pre>
 
@@ -179,16 +184,16 @@ struct CurveData {
 </p>
 
 <pre>
-struct Curve {  
-	CurveData* data;  
-	size_t size;  
-	CurveType type;  
+struct Curve {
+	CurveData* data;
+	size_t size;
+	CurveType type;
 }
 </pre>
 
 <p>
-Curve is made up of the geometry in <code><a href="#CurveData">CurveData</a></code>, which occupies size bytes;  and type, which associates the set of curve callbacks. 
-</pre>
+Curve is made up of the geometry in <code><a href="#CurveData">CurveData</a></code>, which occupies size bytes;  and type, which associates the set of curve callbacks.
+</p>
 
 <p>
 Curve defines a set of two dimensional points that start at (xs, ys) and end at (xe, ye). The curve is described by the caller using a parametric equation of the form:
@@ -207,7 +212,7 @@ All points on the curve are contained by the bounding box formed by the endpoint
 </p>
 
 <pre>
-min(xs, xe) &lt;= x &lt;= max(xs, xe)  
+min(xs, xe) &lt;= x &lt;= max(xs, xe)
 min(ys, ye) &lt;= y &lt;= max(ys, ye)
 </pre>
 
@@ -228,7 +233,7 @@ Every curve has a start and end point; curves may have any amount of additional 
 <script type="module" id="curves" src="curves.js"></script>
 
 <p>
-The additional data is optional. A curve with no additional data can define a line between the start and end points. The additional data does not need to define geometry: for instance, if the caller's original data was split to form monotonic curves, the additional data may store a reference to stitch the original data back together. 
+The additional data is optional. A curve with no additional data can define a line between the start and end points. The additional data does not need to define geometry: for instance, if the caller's original data was split to form monotonic curves, the additional data may store a reference to stitch the original data back together.
 </p>
 
 <p class="c1">Curves In and Curves Out</p>
@@ -244,25 +249,25 @@ The caller can provide output data to the engine that it will return via the cal
 <p class="c1">Curve Callbacks</p>
 
 <pre id="CurveCallBacks">
-struct CurveCallBacks {  
-	CurveOutput curveOutputFuncPtr;  
-	AxisT axisTFuncPtr;  
-	CurveHull curveHullFuncPtr;  
-	CurveIsFinite curveIsFiniteFuncPtr;  
-	CurveIsLine curveIsLineFuncPtr;  
-	SetBounds setBoundsFuncPtr;  
-	CurvePinCtrl curvePinCtrlFuncPtr;  
-	CurveTangent curveTangentFuncPtr;  
-	CurvesEqual curvesEqualFuncPtr;  
-	PtAtT  ptAtTFuncPtr;  
-	HullPtCount ptCountFuncPtr;  
-	Rotate rotateFuncPtr;  
-	SubDivide subDivideFuncPtr;  
-	XYAtT xyAtTFuncPtr;  
-	CurveReverse curveReverseFuncPtr;  
-	CurveConst cutFuncPtr;  
-	CurveConst normalLimitFuncPtr;  
-	CurveConst interceptFuncPtr;  
+struct CurveCallBacks {
+	CurveOutput curveOutputFuncPtr;
+	AxisT axisTFuncPtr;
+	CurveHull curveHullFuncPtr;
+	CurveIsFinite curveIsFiniteFuncPtr;
+	CurveIsLine curveIsLineFuncPtr;
+	SetBounds setBoundsFuncPtr;
+	CurvePinCtrl curvePinCtrlFuncPtr;
+	CurveTangent curveTangentFuncPtr;
+	CurvesEqual curvesEqualFuncPtr;
+	PtAtT  ptAtTFuncPtr;
+	HullPtCount ptCountFuncPtr;
+	Rotate rotateFuncPtr;
+	SubDivide subDivideFuncPtr;
+	XYAtT xyAtTFuncPtr;
+	CurveReverse curveReverseFuncPtr;
+	CurveConst cutFuncPtr;
+	CurveConst normalLimitFuncPtr;
+	CurveConst interceptFuncPtr;
 }
 </pre>
 
@@ -271,21 +276,21 @@ Each supported curve type uses a set of functions that describe how one end of t
 </p>
 
 <p>
-The pathopsv0 engine always requires a line curve type. The geometry of a line curve type connects one endpoint to the other in a straight line. All other curve types are optional; the caller may register any number of additional curve types. 
+The pathopsv0 engine always requires a line curve type. The geometry of a line curve type connects one endpoint to the other in a straight line. All other curve types are optional; the caller may register any number of additional curve types.
 </p>
 
 <p>
 Sample implementations are provided for lines, quadratic Beziers, cubic Beziers, and conic (rational) Beziers. Each sample provides the caller functions described below.
 </p>
 
-<p class="c1" id="SetCurveCallBacks">CurveType SetCurveCallBacks(Context* , CurveCallBacks )</p> 
+<p class="c1" id="SetCurveCallBacks">CurveType SetCurveCallBacks(Context* , CurveCallBacks )</p>
 <p>
 <code>SetCurveCallBacks</code> associates functions called by the engine with each caller-defined curve type. All curve types, including lines, must be defined by the caller. <code><a href="#Context">Context</a></code> points to a created engine context; <code><a href="#CurveCallBacks">CurveCallBacks</a></code> contains the callback functions. Only the first callback is required; the remaining have default implementations provided by the engine.
 </p>
 
-<p class="c1">void (*CurveOutput)(Curve , bool firstPt, bool lastPt, PathOutput )</p>  
+<p class="c1">void (*CurveOutput)(Curve , bool firstPt, bool lastPt, PathOutput )</p>
 <p>
-CurveOutput is provided by the caller for each supported curve type. The engine calls CurveOutput once for each curve that is part of the computed path. A single curve provided as an input operand may generate multiple output curves. 
+CurveOutput is provided by the caller for each supported curve type. The engine calls CurveOutput once for each curve that is part of the computed path. A single curve provided as an input operand may generate multiple output curves.
 </p>
 
 <p >
@@ -307,22 +312,22 @@ note to self: PathOutput and WindingData are the only 'forward declared' types t
 </p>
 
 <pre id="Axis">
-enum class Axis {  
-	vertical,  
-	horizontal,  
+enum class Axis {
+	vertical,
+	horizontal,
 }
 </pre>
 
 <pre id="MatchEnds">
-enum class MatchEnds {  
-	none,  
-	start,  
-	end,  
-	both  
+enum class MatchEnds {
+	none,
+	start,
+	end,
+	both
 }
 </pre>
 
-<p class="c1">OpRoots (*AxisT)(Curve , Axis , float axisIntercept, MatchEnds)</p>  
+<p class="c1">OpRoots (*AxisT)(Curve , Axis , float axisIntercept, MatchEnds)</p>
 <p>
 <code>AxisT</code> is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. The user function returns the t values on the curve intersecting the axisIntercept. Pass nullptr to treat the curve as a straight line between the start and end point.
 </p>
@@ -343,7 +348,7 @@ The returned struct may contain any number of t values. All values should be fro
 *note to self: Axis has additional values used internally. Probably need to create a public version that is separate from the current version*
 </p>
 
-<p class="c1">size_t (*HullPtCount)()</p>  
+<p class="c1">size_t (*HullPtCount)()</p>
 <p>
 <code>HullPtCount</code> is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. HullPtCount numbers the points in the curve that describe the curve's hull, in addition to the endpoints. If the curve does not have a hull (for instance, it is a line); pass nullptr for the HullPtCount parameter.
 </p>
@@ -356,9 +361,9 @@ The CurveHull function, below, describes the hull in more detail.
 The returned value is the number of hull points (typically the number of control points) in the <code><a href="#CurveUserData">CurveUserData</a></code>.
 </p>
 
-<p class="c1">OpPoint (*CurveHull)(Curve, int index)</p>  
+<p class="c1">OpPoint (*CurveHull)(Curve, int index)</p>
 <p>
-CurveHull is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no hull points other than the endpoints.. 
+CurveHull is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no hull points other than the endpoints..
 </p>
 
 <p>
@@ -385,9 +390,9 @@ For instance, the provided quadratic and conic Bezier functions return the curve
 The returned point is part of the outer hull containing the curve's geometry.
 </p>
 
-<p class="c1">bool (*CurvesEqual)(Curve , Curve )</p>  
+<p class="c1">bool (*CurvesEqual)(Curve , Curve )</p>
 <p>
-CurvesEqual is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve does not have <code><a href="#CurveUserData">CurveUserData</a></code> that affects the curve geometry. When curves are equal, the winding of one curve can be combined with the winding in the other curve. As a result, one curve receives both windings, which may cancel each other, and disable one or both curves. 
+CurvesEqual is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve does not have <code><a href="#CurveUserData">CurveUserData</a></code> that affects the curve geometry. When curves are equal, the winding of one curve can be combined with the winding in the other curve. As a result, one curve receives both windings, which may cancel each other, and disable one or both curves.
 </p>
 
 <p>
@@ -400,8 +405,9 @@ CurveEqual should only examine if the caller's private data is equal. The functi
 
 <p>
 The returned value is true if the curve's private data affecting the curve geometry is equal.
+</p>
 
-<p class="c1">bool (*CurveIsFinite)(Curve )</p>  
+<p class="c1">bool (*CurveIsFinite)(Curve )</p>
 <p>
 CurveIsFinite is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no <code><a href="#CurveUserData">CurveUserData</a></code> that affects the curve geometry. As each segment is constructed, each point is checked to see if it is made of finite coordinates. A coordinate is not finite if its value is plus or minus infinity, or not-a-number. CurveIsFinite checks the curve's private data ordinal values and coordinates, if any.
 </p>
@@ -412,16 +418,18 @@ If a non-finite value is detected, subsequent calls to Resolve() will have no ef
 
 <p>
 The returned value is true if the curve's private data is finite.
+</p>
 
-<p class="c1">bool (*CurveIsLine)(Curve )</p>  
+<p class="c1">bool (*CurveIsLine)(Curve )</p>
 <p>
 CurveIsLine function is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no <code><a href="#CurveUserData">CurveUserData</a></code> that affects the curve geometry. When called, CurveIsLine returns true if the curve's path between the curve's endpoints is equivalent to a line with those same endpoints. The rate of travel (the distance traveled for some change in t) is not considered. Once CurveIsLine returns true, the curve's type is set to the provided line type; the original curve functions are no longer called for this curve.
 </p>
 
 <p>
-The returned value is true if the curve describes the same geometry as a line between its endpoints.  
+The returned value is true if the curve describes the same geometry as a line between its endpoints.
+</p>
 
-<p class="c1">OpPoint (*PtAtT)(Curve , float t)</p>  
+<p class="c1">OpPoint (*PtAtT)(Curve , float t)</p>
 <p>
 PtAtT is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. All curves are defined by a start point and an end point, and some geometry in between. Pass nullptr if the curve can be described by a line that moves at a uniform speed as t varies from 0 to 1.
 </p>
@@ -440,29 +448,33 @@ The parameter t will range from zero to one. When t equals zero, PtAtT must retu
 
 <p>
 The returned value is the point on the curve parametrically mapped from 0 to 1.
+</p>
 
-<p class="c1">void (*CurvePinCtrl)(Curve )</p>  
+<p class="c1">void (*CurvePinCtrl)(Curve )</p>
 <p>
-CurvePinCtrl is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no control data. Control data includes any <code><a href="#CurveUserData">CurveUserData</a></code> that must be contained by the curve's bounding box to be valid. For instance, for Bezier curves, the Bezier control points must be contained by the box formed by the start and end points to ensure that the described curve geometry is also contained by the endpoints. 
+CurvePinCtrl is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no control data. Control data includes any <code><a href="#CurveUserData">CurveUserData</a></code> that must be contained by the curve's bounding box to be valid. For instance, for Bezier curves, the Bezier control points must be contained by the box formed by the start and end points to ensure that the described curve geometry is also contained by the endpoints.
 </p>
 
 <p>
-CurvePinCtrl is called by the engine in Resolve() during the normalization pass. CurvePinCtrl may not be called at all; the caller should not rely on CurvePinCtrl to pin any internal data, but should ensure data is well-behaved when initially added to the winding's contour. 
+CurvePinCtrl is called by the engine in Resolve() during the normalization pass. CurvePinCtrl may not be called at all; the caller should not rely on CurvePinCtrl to pin any internal data, but should ensure data is well-behaved when initially added to the winding's contour.
+</p>
 
-<p class="c1">void (*CurveReverse)(Curve )</p>  
+<p class="c1">void (*CurveReverse)(Curve )</p>
+<p>
 CurveReverse is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no <code><a href="#CurveUserData">CurveUserData</a></code> or if the data is unaffected by swapping the endpoints. The pathopsv0 engine calls CurveReverse as needed to construct a continuous output path.
 </p>
 
 <p>
 Most curves do not need a reverse function. Curves with multiple control points, like cubic Beziers, or with multiple parameters, like a start and end angle, need to swap those values if the curve is reversed.
+</p>
 
-<p class="c1">void (*Rotate)(Curve , OpPoint origin , float sx, float sy, Curve result)</p>  
+<p class="c1">void (*Rotate)(Curve , OpPoint origin , float sx, float sy, Curve result)</p>
 <p>
 Rotate is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no <code><a href="#CurveUserData">CurveUserData</a></code> affected by rotating the curve's endpoints. The pathopsv0 engine calls Rotate to axis-align the curve; for example, to intersect the curve with a line.
 </p>
 
 <p>
-It is not necessary for Rotate to do a trigonometric rotation of the curve. If <code><a href="#CurveUserData">CurveUserData</a></code> contains control points, it is computationally cheaper to approximate rotation through scalar matrix multiplication. Additionally, only the data in <code><a href="#CurveUserData">CurveUserData</a></code> should be rotated; the endpoints in result have been rotated by the pathopv0 engine prior to the call.  
+It is not necessary for Rotate to do a trigonometric rotation of the curve. If <code><a href="#CurveUserData">CurveUserData</a></code> contains control points, it is computationally cheaper to approximate rotation through scalar matrix multiplication. Additionally, only the data in <code><a href="#CurveUserData">CurveUserData</a></code> should be rotated; the endpoints in result have been rotated by the pathopv0 engine prior to the call.
 </p>
 
 <p>
@@ -470,7 +482,7 @@ For curves with control points in <code><a href="#CurveUserData">CurveUserData</
 </p>
 
 <pre>
-OpVector v = controlPoint - origin;  
+OpVector v = controlPoint - origin;
 result.controlPoint = { v.dy * sx - v.dx * sy, v.dy * sy + v.dx * sx };
 </pre>
 
@@ -479,21 +491,23 @@ Using <code>OpVector</code> methods, this can be written as:
 </p>
 
 <pre>
-OpVector v = controlPoint - origin;  
+OpVector v = controlPoint - origin;
 result.controlPoint = { s.cross(v), s.dot(v) };
 </pre>
 
-<p class="c1">void (*SubDivide)(Curve curve, float t1, float t2, Curve subcurve)</p>  
+<p class="c1">void (*SubDivide)(Curve curve, float t1, float t2, Curve subcurve)</p>
 <p>
 <code>SubDivide</code> is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no <code><a href="#CurveUserData">CurveUserData</a></code> that affects the curve's geometry. The pathopsv0 engine calls SubDivide after it has created a new subcurve; the subcurve's endpoints are set. The caller then should use the curve, t values, subcurve, and caller's <code><a href="#CurveUserData">CurveUserData</a></code> to compute the <code><a href="#CurveUserData">CurveUserData</a></code> for the result.
 </p>
 
 <p>
 Curve curve is the original data provided by the caller. The t parameters <code>t1</code> and <code>t2</code> are between <code>0</code> and <code>1</code> inclusive. Parameter <code>t1</code> is smaller than <code>t2</code>. The subcurve <code><a href="#CurveUserData">CurveUserData</a></code> is allocated, and its data start and end points are initialized.
+</p>
 
-<p class="c1">OpVector (*CurveTangent)(Curve, float t)</p>  
+<p class="c1">OpVector (*CurveTangent)(Curve, float t)</p>
 <p>
 <code>CurveTangent</code> is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. The returned tangent is the direction the curve is traveling for some value of the parametric t, which is between <code>0</code> and <code>1</code>. To improve performance, it is not necessary to normalize the tangent into a unit vector. For instance, for a line defined by endpoints start and end the tangent is:
+</p>
 
 <pre>end - start</pre>
 
@@ -503,8 +517,9 @@ for all t values.
 
 <p>
 The return value is a non-normalized difference of two points. (Subtracting an <code>OpPoint</code> from another <code>OpPoint</code> returns an <code>OpVector</code>.)
+</p>
 
-<p class="c1">void (*SetBounds)(Curve , OpRect& bounds)</p>  
+<p class="c1">void (*SetBounds)(Curve , OpRect& bounds)</p>
 <p>
 <code>SetBounds</code> is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. Pass nullptr if the curve has no <code><a href="#CurveUserData">CurveUserData</a></code> that affects the curve's geometry. The pathopsv0 engine calls SetBounds to include any geometry that pushes the curve outside the bounds formed by the endpoints.
 </p>
@@ -518,15 +533,15 @@ While the curves provided as input to the engine are required to contain the cur
 </p>
 
 <pre>
-enum class XyChoice {  
-	inX,  
-	inY,  
+enum class XyChoice {
+	inX,
+	inY,
 }
 </pre>
 
-<p class="c1">OpPair (*XYAtT)(Curve , OpPair t, XyChoice )</p>  
+<p class="c1">OpPair (*XYAtT)(Curve , OpPair t, XyChoice )</p>
 <p>
-<code>XYatT</code> is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. <code>XYatT</code> takes a pair of t parameters, and returns a pair of x or y values. <code>XyChoice</code> selects whether the pair of values are x values or y values. 
+<code>XYatT</code> is an optional parameter to <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code>. <code>XYatT</code> takes a pair of t parameters, and returns a pair of x or y values. <code>XyChoice</code> selects whether the pair of values are x values or y values.
 </p>
 
 <p>
@@ -557,10 +572,10 @@ The returned value is a pair of x or y coordinate values, corresponding to the p
 *Note to self: this seems out of left field compared to the other callbacks. Think about it.*
 </p>
 
-<p class="c1">typedef float (*CurveConst)(Curve )<br>  
-CurveConst cut<br>  
-CurveConst normalLimit<br>  
-CurveConst interceptLimit</p>  
+<p class="c1">typedef float (*CurveConst)(Curve )<br>
+CurveConst cut<br>
+CurveConst normalLimit<br>
+CurveConst interceptLimit</p>
 <p>
 <code><a href="#SetCurveCallBacks">SetCurveCallBacks</a></code> can optionally call the CurveConst functions cut, normalLimit, and interceptLimit. These functions should return one constant each that should work for all inputs. However, to allow working around unforeseen bugs, they can be hacked to return values specialized on the context, curve type, or curve value.
 </p>
@@ -575,15 +590,16 @@ The normalLimit constant specifies the limit of the cross product of some curve'
 
 <p>
 The interceptLimit constant specifies how many tries are allowed to find a t value on a curve that can shoot a horizontal or vertical winding ray. If the ray encounters another curve with an indeterminable winding, the winding calculation is restarted at a new location. Decreasing the interceptLimit may improve performance; increasing the interceptLimit may help determine the winding of intricate paths.
+</p>
 
 <p class="c1" id="Winding">Winding</p>
 
 <pre>
 typedef void* WindingData;
 
-struct Winding {  
-	WindingData data;  
-	size_t size;  
+struct Winding {
+	WindingData data;
+	size_t size;
 }
 </pre>
 
@@ -596,7 +612,7 @@ Here, winding is generalized to include any data that is shared by all curves th
 </p>
 
 <p>
-Since the meaning of winding data is determined by the caller, the path engine uses callbacks to determine which curves to keep and which to discard. 
+Since the meaning of winding data is determined by the caller, the path engine uses callbacks to determine which curves to keep and which to discard.
 </p>
 
 <p>
@@ -614,12 +630,12 @@ The C++ strict aliasing rule requires copying WindingData into the caller's form
 <p class="c1">Winding Callbacks</p>
 
 <pre>
-struct WindingCallBacks {  
-	WindingAdd windingAddFuncPtr;  
-	WindingKeep windingKeepFuncPtr;  
-	WindingVisible windingVisibleFuncPtr;  
-	WindingZero windingZeroFuncPtr;  
-	WindingSubtract windingSubtractFuncPtr;  
+struct WindingCallBacks {
+	WindingAdd windingAddFuncPtr;
+	WindingKeep windingKeepFuncPtr;
+	WindingVisible windingVisibleFuncPtr;
+	WindingZero windingZeroFuncPtr;
+	WindingSubtract windingSubtractFuncPtr;
 }
 </pre>
 
@@ -627,35 +643,35 @@ struct WindingCallBacks {
 WindingCallBacks collects functions supplied by the caller, and called by the engine, associated with a Contour. The functions are described below.
 </p>
 
-<p class="c1">void (*WindingAdd)(Winding winding, Winding toAdd)</p>  
+<p class="c1">void (*WindingAdd)(Winding winding, Winding toAdd)</p>
 <p>
 WindingAdd is a required parameter to SetWindingCallBacks. WindingAdd is called by the engine to accumulate the coverage of consecutive curves. Portable code should use std::memcpy to read and modify the winding; violating strict aliasing or using type punning may lead to undefined behavior.
 </p>
 
-<p class="c1">void (*WindingSubtract)(Winding winding, Winding toSubtract)</p>  
+<p class="c1">void (*WindingSubtract)(Winding winding, Winding toSubtract)</p>
 <p>
 WindingSubtract is a required parameter to SetWindingCallBacks. WindingSubtract is called by the engine to accumulate the difference of consecutive curves. Portable code should use std::memcpy() to read and modify the winding; violating strict aliasing or using type punning may lead to undefined behavior.
 </p>
 
-<p class="c1">bool (*WindingVisible)(Winding winding)</p>  
+<p class="c1">bool (*WindingVisible)(Winding winding)</p>
 <p>
 WindingVisible is a required parameter to SetWindingCallBacks. WindingVisible returns false if the winding can be ignored by the engine.
 </p>
 
-<p class="c1">void (*WindingZero)(Winding toZero)</p>  
+<p class="c1">void (*WindingZero)(Winding toZero)</p>
 <p>
 WindingZero is a required parameter to SetWindingCallBacks. WindingZero sets the caller's data to indicate that the winding can be ignored.
 </p>
 
 <pre>
-enum class WindKeep {  
-    Discard,  
-    End,  
-    Start  
+enum class WindKeep {
+    Discard,
+    End,
+    Start
 }
 </pre>
 
-<p class="c1">WindKeep (*WindingKeep)(Winding winding, Winding sum)</p>  
+<p class="c1">WindKeep (*WindingKeep)(Winding winding, Winding sum)</p>
 <p>
 WindingKeep is a required parameter to SetWindingCallBacks. WindingKeep is called by the engine to determine which curves to keep and which to discard. Both winding and sum are associated with the curve to keep. The curve's winding describes how the curve contributes to enclosing other curves. The curve's sum has the effect of all curves to one side of this curve, including the curve itself.
 </p>
@@ -675,29 +691,30 @@ struct Contour;
 </pre>
 
 <p>
-Contour collects the curves and their windings that make up an operand. The engine operates on one or more contours to generate a set of output curves, the PathOutput. 
+Contour collects the curves and their windings that make up an operand. The engine operates on one or more contours to generate a set of output curves, the PathOutput.
 </p>
 
 <p>
 Contour contains winding callbacks, and manages the memory for curves and windings.
+</p>
 
 <p class="c1">Contour Functions</p>
 
-<p class="c1">Contour* CreateContour(Context* , Winding )</p>  
+<p class="c1">Contour* CreateContour(Context* , Winding )</p>
 <p>
 CreateContour allocates an empty Contour, and adds it to the Context. The Context manages the Contour, and removes it when the Contour is deleted. CreateContour adds a <code><a href="#Winding">Winding</a></code> to the Contour; the added <code><a href="#Winding">Winding</a></code> is associated with every Curve subsequently added to the Contour.
 </p>
 
 <pre>
-struct AddCurve {  
-	OpPoint* points;  
-	size_t size;  
-	CurveType type;  
+struct AddCurve {
+	OpPoint* points;
+	size_t size;
+	CurveType type;
 }
 </pre>
 
-<p class="c1">void Add(Contour* , Curve )<br>  
-void Add(Contour* , AddCurve )</p>  
+<p class="c1">void Add(Contour* , Curve )<br>
+void Add(Contour* , AddCurve )</p>
 <p>
 Add appends a Curve to a Contour. The selected Contour contains the curve's <code><a href="#Winding">Winding</a></code>. The Curve data added are the curve's endpoints and any additional caller data.
 </p>
@@ -706,16 +723,16 @@ Add appends a Curve to a Contour. The selected Contour contains the curve's <cod
 As a convenience, AddCurve may be used in place of Curve. The two have identical memory layouts; AddCurve is a better fit when the Curve data is an array of points. Note that the array of points contains the start point, end point, and control points; in that order.
 </p>
 
-<p class="c1">void ResetContour(Contour* )</p>  
+<p class="c1">void ResetContour(Contour* )</p>
 <p>
-ResetContour removes any curve and winding data, but retains the contour callbacks. 
+ResetContour removes any curve and winding data, but retains the contour callbacks.
 </p>
 
 <p class="c3">
 *note to self: this was added for a single test; not sure that this makes sense as an interface*
 </p>
 
-<p class="c1">void SetWindingCallBacks(Contour* , WindingCallBacks )</p>  
+<p class="c1">void SetWindingCallBacks(Contour* , WindingCallBacks )</p>
 <p>
 SetWindingCallBacks associates the callbacks with the Contour. If WindingSubtract is omitted, it will be assigned the callback passed to WindingAdd.
 </p>
@@ -731,14 +748,14 @@ Context contains all of the data to perform an operation. This includes all of t
 <p class="c1">Context Callbacks</p>
 
 <pre>
-struct ContextCallBacks {  
-	EmptyCallerPath emptyCallerPathFuncPtr;  
-	MakeLine makeLineFuncPtr;  
-	SetLineType setLineTypeFuncPtr;  
-	MaxSignSwap maxSignSwapFuncPtr;  
-	MaxCurveCurve maxDepthFuncPtr;  
-	MaxCurveCurve maxSplitsFuncPtr;  
-	MaxLimbs maxLimbsFuncPtr;  
+struct ContextCallBacks {
+	EmptyCallerPath emptyCallerPathFuncPtr;
+	MakeLine makeLineFuncPtr;
+	SetLineType setLineTypeFuncPtr;
+	MaxSignSwap maxSignSwapFuncPtr;
+	MaxCurveCurve maxDepthFuncPtr;
+	MaxCurveCurve maxSplitsFuncPtr;
+	MaxLimbs maxLimbsFuncPtr;
 }
 </pre>
 
@@ -746,85 +763,96 @@ struct ContextCallBacks {
 ContextCallBacks collects functions supplied by the caller, and called by the engine, associated with a Context. The functions are described below.
 </p>
 
-<p class="c1">void (*EmptyCallerPath)(PathOutput )</p>  
+<p class="c1">void (*EmptyCallerPath)(PathOutput )</p>
 <p>
-<code>EmptyCallerPath is a required parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. This removes the curves added by the caller, but leaves the callbacks intact. EmptyCallerPath is called by the engine prior to returning a successful result. If an error is set, EmptyCallerPath is not called and the contents in PathOutput are unchanged.
+<code>EmptyCallerPath</code> is a required parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. This removes the curves added by the caller, but leaves the callbacks intact. EmptyCallerPath is called by the engine prior to returning a successful result. If an error is set, EmptyCallerPath is not called and the contents in PathOutput are unchanged.
+</p>
 
-<p class="c1">CurveType (*SetLineType)(Curve )</p>  
+<p class="c1">CurveType (*SetLineType)(Curve )</p>
 <p>
 <code>SetLineType</code> is a required parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. SetLineType is to determine the caller's <code><a href="#CurveType">CurveType</a></code> associated with a line. The engine may reassign a Curve's <code><a href="#CurveType">CurveType</a></code> if an operation like subdividing has made the result linear.
 
-All collections of geometric rules must include at least one line. 
+All collections of geometric rules must include at least one line.
+</p>
 
-<p class="c1">Curve (*MakeLine)(Curve )</p>  
+<p class="c1">Curve (*MakeLine)(Curve )</p>
 <p>
-<code>MakeLine</code> is a required parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. MakeLine is called by the engine to convert a curve to a line, if some operation like subdividing it has made the result linear; and to check caller types to see if they describe a line.  
-   
-All collections of geometric rules must include at least one line. 
+<code>MakeLine</code> is a required parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. MakeLine is called by the engine to convert a curve to a line, if some operation like subdividing it has made the result linear; and to check caller types to see if they describe a line.
+
+All collections of geometric rules must include at least one line.
 </p>
 
 <p class="c3">
 *note to self: probably, MakeLine can be combined with SetLineType*
 </p>
-<p class="c1">float (*MaxSignSwap)(Curve , Curve )</p>  
+<p class="c1">float (*MaxSignSwap)(Curve , Curve )</p>
 <p>
 <code>MaxSignSwap</code> is an optional parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. The value returned by MaxSignSwap is used by internal curve intersection. Overriding MaxSignSwap is uncommon.
 </p>
 
 <p>
-The number returned, times <code>OpEpsilon</code>, is the maximum value between a pair of curves, used to detect if an intersection was missed. If the distance is positive at one t value and negative at a subsequent t value, it is possible that the curves cross at an intermediate value. As the distance increases, false crossing may be detected. MaxSignSwap should be kept small for best results. 
+The number returned, times <code>OpEpsilon</code>, is the maximum value between a pair of curves, used to detect if an intersection was missed. If the distance is positive at one t value and negative at a subsequent t value, it is possible that the curves cross at an intermediate value. As the distance increases, false crossing may be detected. MaxSignSwap should be kept small for best results.
+</p>
 
-<p class="c1">int (*MaxDepth)(Curve , Curve )</p>  
+<p class="c1">int (*MaxDepth)(Curve , Curve )</p>
 <p>
 <code>MaxDepth</code> is an optional parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. The value returned by MaxDepth is used by internal curve intersection. Overriding MaxDepth is uncommon.
 
 <code>MaxDepth</code> returns the allowed recursion depth of curve intersection. Increasing the depth allows curve intersection to create smaller subcurves, but may obscure errors where the curve intersection does not exist. The curve intersection is terminated when the intersections are found, so increasing MaxDepth does not decrease performance.
 
 Curve pairs requiring larger MaxDepth values may indicate an internal bug. Please file a bug report if increasing MaxDepth is required.
+</p>
 
-<p class="c1">int (*MaxSplits)(Curve , Curve )</p>  
+<p class="c1">int (*MaxSplits)(Curve , Curve )</p>
 <p>
 <code>MaxSplits</code> is an optional parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. The value returned by MaxSplits is used by the engine when it intersects curves. Overriding MaxSplits is uncommon.
 </p>
 
 <p>
-<code>MaxSplits</code> returns the maximum number of temporary subcurves that may be allocated during a curve intersection. During curve intersection recursion, candidate curves that may intersect are kept and subdivided as long as they may lead to finding an intersection. 
+<code>MaxSplits</code> returns the maximum number of temporary subcurves that may be allocated during a curve intersection. During curve intersection recursion, candidate curves that may intersect are kept and subdivided as long as they may lead to finding an intersection.
 </p>
 
 <p>
 Curve pairs requiring larger MaxSplits values may indicate an internal bug. Please file a bug report if increasing MaxSplits is required.
+</p>
 
-<p class="c1">int (*MaxLimbs)(Context* )</p>  
+<p class="c1">int (*MaxLimbs)(Context* )</p>
 <p>
 <code>MaxLimbs</code> is an optional parameter to <code><a href="#SetContextCallBacks">SetContextCallBacks</a></code>. The value returned by MaxLimbs is used by the engine when it assembles curves into the caller's path. Overriding MaxLimbs is uncommon.
 
 <code>MaxLimbs</code> returns the maximum number of branches allowed when searching for an optimal result. Increasing the number may allow very complex results to succeed, but can take much longer. Larger values may hide internal bugs. Please file a bug report if increasing MaxLimbs is required.
+</p>
 
 <p class="c1">Context Functions</p>
 
-<p class="c1">Context* CreateContext()</p>  
+<p class="c1">Context* CreateContext()</p>
 <p>
 <code>CreateContext()</code> returns a new engine context. Each context can have its own set of curves, windings, and rules. The returned Context manages the memory for any elements added to that context. Context contains copies of any caller data; once added, the caller may delete or reuse the memory associated with that data.
+</p>
 
-<p class="c1">void DeleteContext(Context* )</p>  
+<p class="c1">void DeleteContext(Context* )</p>
 <p>
 <code>DeleteContext()</code> releases all memory owned by Context. Referencing Context or any Contour created by that Context after deletion may crash.
+</p>
 
-<p class="c1">void Normalize(Context* )</p>  
+<p class="c1">void Normalize(Context* )</p>
 <p>
-<code>Normalize()</code> computes the extreme values for all input curves, and then sets the tolerance for those inputs. If the input curves include very large or very small values, <code>Normalize()</code> may alter them to keep subsequent math stable. For instance, if the input contains: 1,000,000; 0; and 0.000001; Normalize() will change the small fraction to zero. 
+<code>Normalize()</code> computes the extreme values for all input curves, and then sets the tolerance for those inputs. If the input curves include very large or very small values, <code>Normalize()</code> may alter them to keep subsequent math stable. For instance, if the input contains: 1,000,000; 0; and 0.000001; Normalize() will change the small fraction to zero.
 
-Input curves consisting of values of similar magnitudes will not be normalized. 
+Input curves consisting of values of similar magnitudes will not be normalized.
+</p>
 
-<p class="c1">void Resolve(Context* , PathOutput )</p>  
+<p class="c1">void Resolve(Context* , PathOutput )</p>
 <p>
-<code>Resolve()</code> generates PathOutput from the input curves, windings, and rules. The engine uses the CurveOutput callback to output the result. 
+<code>Resolve()</code> generates PathOutput from the input curves, windings, and rules. The engine uses the CurveOutput callback to output the result.
 
 The engine sends PathOutput to the CurveOutput callback unconditionally; it does not need to be a valid pointer; it can be nullptr, if the callback doesn't require a PathOutput.
+</p>
 
-<p class="c1">void SetContextCallBacks(Context* , ContextCallBacks )</p>  
+<p class="c1">void SetContextCallBacks(Context* , ContextCallBacks )</p>
 <p>
 <code>SetContextCallBacks</code> associates the callbacks with the Context. The callbacks, described above, are called by the engine to set state and tune performance.
+</p>
 
 <p class="c1">Error Handling</p>
 <p>
@@ -836,14 +864,14 @@ Not all errors are detectable. Some errors may cause the engine to return the wr
 </p>
 
 <pre>
-enum class ContextError {  
-	none,  
-	end,  
-	finite,  
-	intersection,   
-	missing,  
-	toVertical,  
-	tree  
+enum class ContextError {
+	none,
+	end,
+	finite,
+	intersection,
+	missing,
+	toVertical,
+	tree
 }
 </pre>
 
@@ -863,12 +891,12 @@ enum class ContextError {
 </p>
 <p class="c1">Error Functions</p>
 
-<p class="c1">ContextError Error(Context* )</p>  
+<p class="c1">ContextError Error(Context* )</p>
 <p>
 Error() returns the first error set in this context. The error may be set by SetError() or internally by the engine.
 </p>
 
-<p class="c1">void SetError(Context* , ContextError )</p>  
+<p class="c1">void SetError(Context* , ContextError )</p>
 <p>
 SetError() can set or reset the context error. Pass ContextError::none to reset the error. Pass any other value to set the error. If the context error is set, calls to the engine have no effect.
 </p>
@@ -879,7 +907,7 @@ SetError() allows testing to keep Context in step with external errors. For inst
 <pre>
 bool (*ErrorDispatch)(ContextError , Context* , Curve* )
 </pre>
-<p class="c1">void SetErrorHandler(Context* , ErrorDispatch )</p>  
+<p class="c1">void SetErrorHandler(Context* , ErrorDispatch )</p>
 <p>
 SetErrorHandler() installs an error handler. The error handler allows execution to abort, or continue; based on the error and current state. When ErrorDispatch is called, ContextError and Context are set, but Curve may be nullptr.
 </p>
@@ -895,6 +923,7 @@ Ignoring errors to attempt to fix bugs is a bad idea. Please file a bug if patho
 <p>
 ErrorDispatch returns true if the error should abort further execution; and false if the error should be ignored.
 </p>
+
 
 </body>
 </html>
