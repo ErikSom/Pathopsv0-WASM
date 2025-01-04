@@ -15,7 +15,21 @@ PathopsV0Factory().then((PathopsV0) => {
     ctx.textAlign = 'left';
     requestAnimationFrame(drawCanvas);
 
-    canvas.addEventListener('click', (event) => {
+    let dragging = false;
+    canvas.addEventListener('pointerdown', (event) => {
+        dragging = true;
+        event.preventDefault();
+    });
+    canvas.addEventListener('pointerup', (event) => {
+        dragging = false;
+        event.preventDefault();
+    });
+
+
+    canvas.addEventListener('pointermove', (event) => {
+        if (!dragging)
+            return;
+
         const canvasBoundingRect = canvas.getBoundingClientRect();
         const scale = {
             x: canvas.width / canvasBoundingRect.width,
@@ -27,6 +41,8 @@ PathopsV0Factory().then((PathopsV0) => {
             return;
         nextT = x < 40 ? 0 : x < 160 ? (x - 40) / 120 : 1;
         requestAnimationFrame(drawCanvas);
+
+        event.preventDefault();
     });
 
     function drawAxes() {

@@ -21,16 +21,18 @@ PathopsV0Factory().then((PathopsV0) => {
     let moveX, moveY;
     let curves = 1;
     ctx.font = "16px Arial";
+    let canvasBoundingRect;
+    let canvasScale = { x: 1, y: 1 };
     requestAnimationFrame(drawCanvas);
 
     canvas.addEventListener('pointerdown', (event) => {
-        const canvasBoundingRect = canvas.getBoundingClientRect();
-        const scale = {
+        canvasBoundingRect = canvas.getBoundingClientRect();
+        canvasScale = {
             x: canvas.width / canvasBoundingRect.width,
             y: canvas.height / canvasBoundingRect.height,
         };
-        downX = (event.clientX - canvasBoundingRect.left) * scale.x;
-        downY = (event.clientY - canvasBoundingRect.top) * scale.y;
+        downX = (event.clientX - canvasBoundingRect.left) * canvasScale.x;
+        downY = (event.clientY - canvasBoundingRect.top) * canvasScale.y;
         moveX = downX;
         moveY = downY;
         if (check(startAngle))
@@ -48,8 +50,8 @@ PathopsV0Factory().then((PathopsV0) => {
     document.addEventListener('pointermove', (event) => {
         if (endHit < 0)
             return;
-        moveX += event.movementX;
-        moveY += event.movementY;
+        moveX += event.movementX * canvasScale.x;
+        moveY += event.movementY * canvasScale.y;
         let newAngle = Math.atan2(moveY - ctrY, moveX - ctrX);
         if (tryStart == endHit)
             startAngle = newAngle;

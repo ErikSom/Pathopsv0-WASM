@@ -24,16 +24,18 @@ PathopsV0Factory().then((PathopsV0) => {
     let ctrlW = pts[2].w;
     let endHit = -1;
     let bType = 0;
+    let canvasBoundingRect;
+    let canvasScale = { x: 1, y: 1 };
     requestAnimationFrame(drawCanvas);
 
     canvas.addEventListener('pointerdown', (event) => {
-        const canvasBoundingRect = canvas.getBoundingClientRect();
-        const scale = {
+        canvasBoundingRect = canvas.getBoundingClientRect();
+        canvasScale = {
             x: canvas.width / canvasBoundingRect.width,
             y: canvas.height / canvasBoundingRect.height,
         };
-        const downX = (event.clientX - canvasBoundingRect.left) * scale.x;
-        const downY = (event.clientY - canvasBoundingRect.top) * scale.y;
+        const downX = (event.clientX - canvasBoundingRect.left) * canvasScale.x;
+        const downY = (event.clientY - canvasBoundingRect.top) * canvasScale.y;
         endHit = -1;
         for (var i = 0; i < ptCount[bType]; ++i) {
             if (check(pts[i], downX, downY))
@@ -44,6 +46,8 @@ PathopsV0Factory().then((PathopsV0) => {
             endHit = 4;
             ctrlW = pts[2].w;
         }
+
+        handleTypeChange(downX, downY);
     });
 
     document.addEventListener('pointerup', (event) => {
@@ -54,33 +58,24 @@ PathopsV0Factory().then((PathopsV0) => {
         if (endHit < 0)
             return;
         if (endHit < 4) {
-            pts[endHit].x += event.movementX;
-            pts[endHit].y += event.movementY;
+            pts[endHit].x += event.movementX * canvasScale.x;
+            pts[endHit].y += event.movementY * canvasScale.y;
         } else {
-            const canvasBoundingRect = canvas.getBoundingClientRect();
-            const scaleY = canvas.height / canvasBoundingRect.height;
-            ctrlW -= event.movementY * scaleY / (wCtrlYMax - wCtrlYMin) * (maxW - minW);
+            ctrlW -= event.movementY * canvasScale.y / (wCtrlYMax - wCtrlYMin) * (maxW - minW);
             pts[2].w = Math.max(Math.min(maxW, ctrlW), minW);
         }
         requestAnimationFrame(drawCanvas);
     });
 
-    canvas.addEventListener('click', (event) => {
-        const canvasBoundingRect = canvas.getBoundingClientRect();
-        const scale = {
-            x: canvas.width / canvasBoundingRect.width,
-            y: canvas.height / canvasBoundingRect.height,
-        };
-        const x = (event.clientX - canvasBoundingRect.left) * scale.x;
-        const y = (event.clientY - canvasBoundingRect.top) * scale.y;
-        if (y < canvas.height - 25)
+    function handleTypeChange(downX, downY) {
+        if (downY < canvas.height - 25)
             return;
-        if (x < 15)
+        if (downX < 15)
             bType = (bType + 3) % 4;
-        if (x > canvas.width - 15)
+        if (downX > canvas.width - 15)
             bType = (bType + 1) % 4;
         requestAnimationFrame(drawCanvas);
-    });
+    };
 
     document.addEventListener('keypress', (event) => {
         if ('d' == event.key)

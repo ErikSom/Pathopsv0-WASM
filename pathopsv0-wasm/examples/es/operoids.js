@@ -7,7 +7,6 @@ PathopsV0Factory().then((PathopsV0) => {
     target.before(canvas);
     canvas.width = 400;
     canvas.height = 200;
-    canvas.style.maxWidth = '100%';
     var ctx = canvas.getContext('2d');
     const as = [3, 0, 9, 1, 8, 4, 10, 7, 6, 10, 5, 8, 0, 6, 0, 3, 2, 3],
         bs = [0, 4, 1, 2, 6, 1, 9, 0, 10, 2, 9, 4, 10, 6, 7, 10, 1, 7];
