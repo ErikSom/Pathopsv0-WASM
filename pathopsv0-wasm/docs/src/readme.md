@@ -84,7 +84,7 @@ The curves are further restricted, requiring a parametric definition, and monoto
 enum class CurveType
 ```
 
-`CurveType` is a number that all curves with the same geometric properties share. It is also an index into a table of curve callback functions. `CurveType` is returned when the callback functions are installed in [Context](#context).
+`CurveType` is a number that all curves with the same geometric properties share. It is also an index into a table of curve callback functions. `CurveType` is returned when the callback functions are installed in [Context](#Context).
 
 ### CurveUserData
 ```cpp
@@ -641,7 +641,7 @@ Input curves consisting of values of similar magnitudes will not be normalized.
 
 The engine sends PathOutput to the CurveOutput callback unconditionally; it does not need to be a valid pointer; it can be nullptr, if the callback doesn't require a PathOutput.
 
-### void SetContextCallBacks(Context*, ContextCallBacks)
+### void SetContextCallBacks(Context*, ContextCallBacks) {id=SetContextCallbacks}
 
 [SetContextCallBacks](#SetContextCallbacks) associates the callbacks with the Context. The callbacks, described above, are called by the engine to set state and tune performance.
 
