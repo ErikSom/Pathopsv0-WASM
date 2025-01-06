@@ -1,12 +1,8 @@
-import PathopsV0Factory from '../../dist/es/pathops.js';
+import PathopsV0Factory from '../../../../dist/es/pathops.js';
 
 PathopsV0Factory().then((PathopsV0) => {
     var { FillPath2D, PathOps } = PathopsV0;
-    const canvas = document.createElement('canvas');
-    const target = document.getElementById('operoids');
-    target.before(canvas);
-    canvas.width = 400;
-    canvas.height = 200;
+    const canvas = document.getElementById('scene');
     var ctx = canvas.getContext('2d');
     const as = [3, 0, 9, 1, 8, 4, 10, 7, 6, 10, 5, 8, 0, 6, 0, 3, 2, 3],
         bs = [0, 4, 1, 2, 6, 1, 9, 0, 10, 2, 9, 4, 10, 6, 7, 10, 1, 7];
@@ -21,8 +17,7 @@ PathopsV0Factory().then((PathopsV0) => {
     const texts = ['intersect', 'union', 'difference', 'reverse difference',
         'exclusive or']
     let textIndex = 0;
-    ctx.font = "16px Arial";
-    ctx.textAlign = 'center';
+
     requestAnimationFrame(drawCanvas);
 
     canvas.addEventListener('pointerdown', (event) => {
@@ -98,6 +93,10 @@ PathopsV0Factory().then((PathopsV0) => {
     }
 
     function drawCanvas() {
+        // resizing a canvas clears its state
+        ctx.font = "16px Arial";
+        ctx.textAlign = 'center';
+
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         drawRoid(ctx, as, aAngle, aX, aY);

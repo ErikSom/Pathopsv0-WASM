@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>operoids</title>
+    <style>
+        body {
+            height: 100dvh;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            width: 100%;
+        }
+        .fullscreen {
+            position: fixed;
+            top: 0px;
+            right: 0px;
+            margin: 8px;
+            width: 24px;
+            height: 24px;
+            border: none;
+            background-color: transparent;
+            filter: invert(1);
+            background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNCIgaGVpZ2h0PSIxNCI+PHBhdGggZmlsbD0iIzAwMCIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMiA5SDB2NWg1di0ySDJ6TTAgNWgyVjJoM1YwSDB6bTEyIDdIOXYyaDVWOWgtMnpNOSAwdjJoM3YzaDJWMHoiLz48L3N2Zz4=");
+            background-size: cover;
+        }
+
+        html:fullscreen .fullscreen,
+        html:-webkit-full-screen .fullscreen {
+            background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNCIgaGVpZ2h0PSIxNCI+PHBhdGggZmlsbD0iIzAwMCIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMCAxMWgzdjNoMlY5SDB6bTMtOEgwdjJoNVYwSDN6bTYgMTFoMnYtM2gzVjlIOXptMi0xMVYwSDl2NWg1VjN6Ii8+PC9zdmc+");
+        }
+
+    </style>
+</head>
+<body>
+    <canvas id="scene" width="800" height="400"></canvas>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const example = urlParams.get('example') || 'operoids';
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = `./scenes/${example}.js`;
+        document.head.appendChild(script);
+
+        function resizeCanvas() {
+            scene.width = window.innerWidth;
+            scene.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        function toggleFullscreen() {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                document.documentElement.requestFullscreen();
+            }
+        }
+    </script>
+    <button onclick="toggleFullscreen()" class="fullscreen"></button>
+</body>
+</html>
