@@ -1,5 +1,6 @@
 #include <emscripten/bind.h>
 #include "emscripten/Path2D.h"
+#include <malloc.h>
 
 using namespace emscripten;
 using namespace TwoD;
@@ -144,5 +145,63 @@ class_<PathOps>("PathOps")
     result.opCommon(right, Ops::sect);
     return result;
 }));
+
+// ------------------------------------------------------------------------
+// Memory debugging
+// ------------------------------------------------------------------------
+struct MemoryStats {
+    size_t arena;
+    size_t ordblks;
+    size_t smblks;
+    size_t hblks;
+    size_t hblkhd;
+    size_t usmblks;
+    size_t fsmblks;
+    size_t uordblks;
+    size_t fordblks;
+    size_t keepcost;
+    // user-friendly aliases
+    size_t allocatedSpace;
+    size_t freeSpace;
+    size_t totalSpace;
+};
+
+value_object<MemoryStats>("MemoryStats")
+    // original mallinfo fields
+    .field("arena", &MemoryStats::arena)
+    .field("ordblks", &MemoryStats::ordblks)
+    .field("smblks", &MemoryStats::smblks)
+    .field("hblks", &MemoryStats::hblks)
+    .field("hblkhd", &MemoryStats::hblkhd)
+    .field("usmblks", &MemoryStats::usmblks)
+    .field("fsmblks", &MemoryStats::fsmblks)
+    .field("uordblks", &MemoryStats::uordblks)
+    .field("fordblks", &MemoryStats::fordblks)
+    .field("keepcost", &MemoryStats::keepcost)
+    // user-friendly aliases
+    .field("allocatedSpace", &MemoryStats::allocatedSpace)
+    .field("freeSpace", &MemoryStats::freeSpace)
+    .field("totalSpace", &MemoryStats::totalSpace)
+;
+
+function("GetMemoryStats", +[]() -> MemoryStats {
+    struct mallinfo info = mallinfo();
+    size_t totalSpace = static_cast<size_t>(info.arena) + static_cast<size_t>(info.hblkhd);
+    return MemoryStats {
+        static_cast<size_t>(info.arena),
+        static_cast<size_t>(info.ordblks),
+        static_cast<size_t>(info.smblks),
+        static_cast<size_t>(info.hblks),
+        static_cast<size_t>(info.hblkhd),
+        static_cast<size_t>(info.usmblks),
+        static_cast<size_t>(info.fsmblks),
+        static_cast<size_t>(info.uordblks),
+        static_cast<size_t>(info.fordblks),
+        static_cast<size_t>(info.keepcost),
+        static_cast<size_t>(info.uordblks),
+        static_cast<size_t>(info.fordblks),
+        totalSpace
+    };
+});
 
 }
