@@ -80,7 +80,7 @@ function locateFile(path) {
 var readAsync, readBinary;
 
 if (ENVIRONMENT_IS_SHELL) {
-  if ((typeof process == "object" && typeof require === "function") || typeof window == "object" || typeof importScripts == "function") throw new Error("not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)");
+  if ((typeof process == "object" && typeof require === "function") || typeof window == "object" || typeof WorkerGlobalScope != "undefined") throw new Error("not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)");
 } else // Note that this includes Node.js workers when relevant (pthreads is enabled).
 // Node.js workers are detected as a combination of ENVIRONMENT_IS_WORKER and
 // ENVIRONMENT_IS_NODE.
@@ -108,19 +108,18 @@ if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
   } else {
     scriptDirectory = scriptDirectory.substr(0, scriptDirectory.replace(/[?#].*/, "").lastIndexOf("/") + 1);
   }
-  if (!(typeof window == "object" || typeof importScripts == "function")) throw new Error("not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)");
+  if (!(typeof window == "object" || typeof WorkerGlobalScope != "undefined")) throw new Error("not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)");
   {
     // include: web_or_worker_shell_read.js
-    readAsync = url => {
+    readAsync = async url => {
       assert(!isFileURI(url), "readAsync does not work with file:// URLs");
-      return fetch(url, {
+      var response = await fetch(url, {
         credentials: "same-origin"
-      }).then(response => {
-        if (response.ok) {
-          return response.arrayBuffer();
-        }
-        return Promise.reject(new Error(response.status + " : " + response.url));
       });
+      if (response.ok) {
+        return response.arrayBuffer();
+      }
+      throw new Error(response.status + " : " + response.url);
     };
   }
 } else // end include: web_or_worker_shell_read.js
@@ -403,10 +402,11 @@ var __ATPOSTRUN__ = [];
 var runtimeInitialized = false;
 
 function preRun() {
-  var preRuns = Module["preRun"];
-  if (preRuns) {
-    if (typeof preRuns == "function") preRuns = [ preRuns ];
-    preRuns.forEach(addOnPreRun);
+  if (Module["preRun"]) {
+    if (typeof Module["preRun"] == "function") Module["preRun"] = [ Module["preRun"] ];
+    while (Module["preRun"].length) {
+      addOnPreRun(Module["preRun"].shift());
+    }
   }
   callRuntimeCallbacks(__ATPRERUN__);
 }
@@ -421,10 +421,11 @@ function initRuntime() {
 
 function postRun() {
   checkStackCookie();
-  var postRuns = Module["postRun"];
-  if (postRuns) {
-    if (typeof postRuns == "function") postRuns = [ postRuns ];
-    postRuns.forEach(addOnPostRun);
+  if (Module["postRun"]) {
+    if (typeof Module["postRun"] == "function") Module["postRun"] = [ Module["postRun"] ];
+    while (Module["postRun"].length) {
+      addOnPostRun(Module["postRun"].shift());
+    }
   }
   callRuntimeCallbacks(__ATPOSTRUN__);
 }
@@ -466,12 +467,12 @@ assert(Math.trunc, "This browser does not support Math.trunc(), build with LEGAC
 // the dependencies are met.
 var runDependencies = 0;
 
-var runDependencyWatcher = null;
-
 var dependenciesFulfilled = null;
 
 // overridden to take different actions when all run dependencies are fulfilled
 var runDependencyTracking = {};
+
+var runDependencyWatcher = null;
 
 function getUniqueRunDependency(id) {
   var orig = id;
@@ -654,48 +655,50 @@ function getBinarySync(file) {
   throw "both async and sync fetching of the wasm failed";
 }
 
-function getBinaryPromise(binaryFile) {
+async function getWasmBinary(binaryFile) {
   // If we don't have the binary yet, load it asynchronously using readAsync.
   if (!wasmBinary) {
     // Fetch the binary using readAsync
-    return readAsync(binaryFile).then(response => new Uint8Array(/** @type{!ArrayBuffer} */ (response)), // Fall back to getBinarySync if readAsync fails
-    () => getBinarySync(binaryFile));
+    try {
+      var response = await readAsync(binaryFile);
+      return new Uint8Array(response);
+    } catch {}
   }
   // Otherwise, getBinarySync should be able to get it synchronously
-  return Promise.resolve().then(() => getBinarySync(binaryFile));
+  return getBinarySync(binaryFile);
 }
 
-function instantiateArrayBuffer(binaryFile, imports, receiver) {
-  return getBinaryPromise(binaryFile).then(binary => WebAssembly.instantiate(binary, imports)).then(receiver, reason => {
+async function instantiateArrayBuffer(binaryFile, imports) {
+  try {
+    var binary = await getWasmBinary(binaryFile);
+    var instance = await WebAssembly.instantiate(binary, imports);
+    return instance;
+  } catch (reason) {
     err(`failed to asynchronously prepare wasm: ${reason}`);
     // Warn on some common problems.
     if (isFileURI(wasmBinaryFile)) {
       err(`warning: Loading from a file URI (${wasmBinaryFile}) is not supported in most browsers. See https://emscripten.org/docs/getting_started/FAQ.html#how-do-i-run-a-local-webserver-for-testing-why-does-my-program-stall-in-downloading-or-preparing`);
     }
     abort(reason);
-  });
+  }
 }
 
-function instantiateAsync(binary, binaryFile, imports, callback) {
+async function instantiateAsync(binary, binaryFile, imports) {
   if (!binary && typeof WebAssembly.instantiateStreaming == "function" && !isDataURI(binaryFile) && typeof fetch == "function") {
-    return fetch(binaryFile, {
-      credentials: "same-origin"
-    }).then(response => {
-      // Suppress closure warning here since the upstream definition for
-      // instantiateStreaming only allows Promise<Repsponse> rather than
-      // an actual Response.
-      // TODO(https://github.com/google/closure-compiler/pull/3913): Remove if/when upstream closure is fixed.
-      /** @suppress {checkTypes} */ var result = WebAssembly.instantiateStreaming(response, imports);
-      return result.then(callback, function(reason) {
-        // We expect the most common failure cause to be a bad MIME type for the binary,
-        // in which case falling back to ArrayBuffer instantiation should work.
-        err(`wasm streaming compile failed: ${reason}`);
-        err("falling back to ArrayBuffer instantiation");
-        return instantiateArrayBuffer(binaryFile, imports, callback);
+    try {
+      var response = fetch(binaryFile, {
+        credentials: "same-origin"
       });
-    });
+      var instantiationResult = await WebAssembly.instantiateStreaming(response, imports);
+      return instantiationResult;
+    } catch (reason) {
+      // We expect the most common failure cause to be a bad MIME type for the binary,
+      // in which case falling back to ArrayBuffer instantiation should work.
+      err(`wasm streaming compile failed: ${reason}`);
+      err("falling back to ArrayBuffer instantiation");
+    }
   }
-  return instantiateArrayBuffer(binaryFile, imports, callback);
+  return instantiateArrayBuffer(binaryFile, imports);
 }
 
 function getWasmImports() {
@@ -708,8 +711,7 @@ function getWasmImports() {
 
 // Create the wasm instance.
 // Receives the wasm imports, returns the exports.
-function createWasm() {
-  var info = getWasmImports();
+async function createWasm() {
   // Load the wasm module and create an instance of using native support in the JS engine.
   // handle a generated wasm instance, receiving its exports and
   // performing other necessary setup
@@ -740,6 +742,7 @@ function createWasm() {
     // When the regression is fixed, can restore the above PTHREADS-enabled path.
     receiveInstance(result["instance"]);
   }
+  var info = getWasmImports();
   // User shell pages can write their own Module.instantiateWasm = function(imports, successCallback) callback
   // to manually instantiate the Wasm module themselves. This allows pages to
   // run the instantiation parallel to any other async startup actions they are
@@ -756,9 +759,15 @@ function createWasm() {
     }
   }
   wasmBinaryFile ??= findWasmBinary();
-  // If instantiation fails, reject the module ready promise.
-  instantiateAsync(wasmBinary, wasmBinaryFile, info, receiveInstantiationResult).catch(readyPromiseReject);
-  return {};
+  try {
+    var result = await instantiateAsync(wasmBinary, wasmBinaryFile, info);
+    receiveInstantiationResult(result);
+    return result;
+  } catch (e) {
+    // If instantiation fails, reject the module ready promise.
+    readyPromiseReject(e);
+    return;
+  }
 }
 
 // include: runtime_debug.js
@@ -910,15 +919,19 @@ function dbg(...args) {
 // end include: runtime_debug.js
 // === Body ===
 // end include: preamble.js
-/** @constructor */ function ExitStatus(status) {
-  this.name = "ExitStatus";
-  this.message = `Program terminated with exit(${status})`;
-  this.status = status;
+class ExitStatus {
+  name="ExitStatus";
+  constructor(status) {
+    this.message = `Program terminated with exit(${status})`;
+    this.status = status;
+  }
 }
 
 var callRuntimeCallbacks = callbacks => {
-  // Pass the module as the first argument.
-  callbacks.forEach(f => f(Module));
+  while (callbacks.length > 0) {
+    // Pass the module as the first argument.
+    callbacks.shift()(Module);
+  }
 };
 
 /**
@@ -1194,9 +1207,7 @@ var UTF8Decoder = typeof TextDecoder != "undefined" ? new TextDecoder : undefine
   return ptr ? UTF8ArrayToString(HEAPU8, ptr, maxBytesToRead) : "";
 };
 
-var ___assert_fail = (condition, filename, line, func) => {
-  abort(`Assertion failed: ${UTF8ToString(condition)}, at: ` + [ filename ? UTF8ToString(filename) : "unknown filename", line, func ? UTF8ToString(func) : "unknown function" ]);
-};
+var ___assert_fail = (condition, filename, line, func) => abort(`Assertion failed: ${UTF8ToString(condition)}, at: ` + [ filename ? UTF8ToString(filename) : "unknown filename", line, func ? UTF8ToString(func) : "unknown function" ]);
 
 class ExceptionInfo {
   // excPtr - Thrown object pointer to wrap. Metadata pointer is calculated from it.
@@ -1265,52 +1276,27 @@ var ___handle_stack_overflow = requested => {
   abort(`stack overflow (Attempt to set SP to ${ptrToString(requested)}` + `, with stack limits [${ptrToString(end)} - ${ptrToString(base)}` + "]). If you require more stack space build with -sSTACK_SIZE=<bytes>");
 };
 
-var __abort_js = () => {
-  abort("native code called abort()");
-};
+var __abort_js = () => abort("native code called abort()");
 
-var embindRepr = v => {
-  if (v === null) {
-    return "null";
-  }
-  var t = typeof v;
-  if (t === "object" || t === "array" || t === "function") {
-    return v.toString();
-  } else {
-    return "" + v;
+var structRegistrations = {};
+
+var runDestructors = destructors => {
+  while (destructors.length) {
+    var ptr = destructors.pop();
+    var del = destructors.pop();
+    del(ptr);
   }
 };
 
-var embind_init_charCodes = () => {
-  var codes = new Array(256);
-  for (var i = 0; i < 256; ++i) {
-    codes[i] = String.fromCharCode(i);
-  }
-  embind_charCodes = codes;
-};
-
-var embind_charCodes;
-
-var readLatin1String = ptr => {
-  var ret = "";
-  var c = ptr;
-  while (SAFE_HEAP_LOAD(c, 1, 1)) {
-    ret += embind_charCodes[SAFE_HEAP_LOAD(c++, 1, 1)];
-  }
-  return ret;
-};
+/** @suppress {globalThis} */ function readPointer(pointer) {
+  return this["fromWireType"](SAFE_HEAP_LOAD(((pointer) >> 2) * 4, 4, 1));
+}
 
 var awaitingDependencies = {};
 
 var registeredTypes = {};
 
 var typeDependencies = {};
-
-var BindingError;
-
-var throwBindingError = message => {
-  throw new BindingError(message);
-};
 
 var InternalError;
 
@@ -1354,6 +1340,103 @@ var whenDependentTypesAreResolved = (myTypes, dependentTypes, getTypeConverters)
   }
 };
 
+var __embind_finalize_value_object = structType => {
+  var reg = structRegistrations[structType];
+  delete structRegistrations[structType];
+  var rawConstructor = reg.rawConstructor;
+  var rawDestructor = reg.rawDestructor;
+  var fieldRecords = reg.fields;
+  var fieldTypes = fieldRecords.map(field => field.getterReturnType).concat(fieldRecords.map(field => field.setterArgumentType));
+  whenDependentTypesAreResolved([ structType ], fieldTypes, fieldTypes => {
+    var fields = {};
+    fieldRecords.forEach((field, i) => {
+      var fieldName = field.fieldName;
+      var getterReturnType = fieldTypes[i];
+      var getter = field.getter;
+      var getterContext = field.getterContext;
+      var setterArgumentType = fieldTypes[i + fieldRecords.length];
+      var setter = field.setter;
+      var setterContext = field.setterContext;
+      fields[fieldName] = {
+        read: ptr => getterReturnType["fromWireType"](getter(getterContext, ptr)),
+        write: (ptr, o) => {
+          var destructors = [];
+          setter(setterContext, ptr, setterArgumentType["toWireType"](destructors, o));
+          runDestructors(destructors);
+        }
+      };
+    });
+    return [ {
+      name: reg.name,
+      "fromWireType": ptr => {
+        var rv = {};
+        for (var i in fields) {
+          rv[i] = fields[i].read(ptr);
+        }
+        rawDestructor(ptr);
+        return rv;
+      },
+      "toWireType": (destructors, o) => {
+        // todo: Here we have an opportunity for -O3 level "unsafe" optimizations:
+        // assume all fields are present without checking.
+        for (var fieldName in fields) {
+          if (!(fieldName in o)) {
+            throw new TypeError(`Missing field: "${fieldName}"`);
+          }
+        }
+        var ptr = rawConstructor();
+        for (fieldName in fields) {
+          fields[fieldName].write(ptr, o[fieldName]);
+        }
+        if (destructors !== null) {
+          destructors.push(rawDestructor, ptr);
+        }
+        return ptr;
+      },
+      argPackAdvance: GenericWireTypeSize,
+      "readValueFromPointer": readPointer,
+      destructorFunction: rawDestructor
+    } ];
+  });
+};
+
+var embindRepr = v => {
+  if (v === null) {
+    return "null";
+  }
+  var t = typeof v;
+  if (t === "object" || t === "array" || t === "function") {
+    return v.toString();
+  } else {
+    return "" + v;
+  }
+};
+
+var embind_init_charCodes = () => {
+  var codes = new Array(256);
+  for (var i = 0; i < 256; ++i) {
+    codes[i] = String.fromCharCode(i);
+  }
+  embind_charCodes = codes;
+};
+
+var embind_charCodes;
+
+var readLatin1String = ptr => {
+  var ret = "";
+  var c = ptr;
+  while (SAFE_HEAP_LOAD(c, 1, 1)) {
+    ret += embind_charCodes[SAFE_HEAP_LOAD(c++, 1, 1)];
+  }
+  return ret;
+};
+
+var BindingError;
+
+var throwBindingError = message => {
+  throw new BindingError(message);
+};
+
 /** @param {Object=} options */ function sharedRegisterType(rawType, registeredInstance, options = {}) {
   var name = registeredInstance.name;
   if (!rawType) {
@@ -1376,7 +1459,7 @@ var whenDependentTypesAreResolved = (myTypes, dependentTypes, getTypeConverters)
 }
 
 /** @param {Object=} options */ function registerType(rawType, registeredInstance, options = {}) {
-  if (!("argPackAdvance" in registeredInstance)) {
+  if (registeredInstance.argPackAdvance === undefined) {
     throw new TypeError("registerType registeredInstance requires argPackAdvance");
   }
   return sharedRegisterType(rawType, registeredInstance, options);
@@ -1773,16 +1856,14 @@ var ensureOverloadTable = (proto, methodName, humanName) => {
     // We are exposing a function with the same name as an existing function. Create an overload table and a function selector
     // that routes between the two.
     ensureOverloadTable(Module, name, name);
-    if (Module.hasOwnProperty(numArguments)) {
+    if (Module[name].overloadTable.hasOwnProperty(numArguments)) {
       throwBindingError(`Cannot register multiple overloads of a function with the same number of arguments (${numArguments})!`);
     }
     // Add the new function into the overload table.
     Module[name].overloadTable[numArguments] = value;
   } else {
     Module[name] = value;
-    if (undefined !== numArguments) {
-      Module[name].numArguments = numArguments;
-    }
+    Module[name].argCount = numArguments;
   }
 };
 
@@ -1932,10 +2013,6 @@ var upcastPointer = (ptr, ptrClass, desiredClass) => {
   return ptr;
 }
 
-/** @suppress {globalThis} */ function readPointer(pointer) {
-  return this["fromWireType"](SAFE_HEAP_LOAD(((pointer) >> 2) * 4, 4, 1));
-}
-
 var init_RegisteredPointer = () => {
   Object.assign(RegisteredPointer.prototype, {
     getPointee(ptr) {
@@ -2008,9 +2085,9 @@ var getWasmTableEntry = funcPtr => {
   var func = wasmTableMirror[funcPtr];
   if (!func) {
     if (funcPtr >= wasmTableMirror.length) wasmTableMirror.length = funcPtr + 1;
-    wasmTableMirror[funcPtr] = func = wasmTable.get(funcPtr);
+    /** @suppress {checkTypes} */ wasmTableMirror[funcPtr] = func = wasmTable.get(funcPtr);
   }
-  assert(wasmTable.get(funcPtr) == func, "JavaScript-side Wasm function table mirror is out of date!");
+  /** @suppress {checkTypes} */ assert(wasmTable.get(funcPtr) == func, "JavaScript-side Wasm function table mirror is out of date!");
   return func;
 };
 
@@ -2133,14 +2210,6 @@ var __embind_register_class = (rawType, rawPointerType, rawConstPointerType, bas
     replacePublicSymbol(legalFunctionName, constructor);
     return [ referenceConverter, pointerConverter, constPointerConverter ];
   });
-};
-
-var runDestructors = destructors => {
-  while (destructors.length) {
-    var ptr = destructors.pop();
-    var del = destructors.pop();
-    del(ptr);
-  }
 };
 
 function usesDestructorStack(argTypes) {
@@ -2680,6 +2749,21 @@ var __embind_register_float = (rawType, name, size) => {
   });
 };
 
+var __embind_register_function = (name, argCount, rawArgTypesAddr, signature, rawInvoker, fn, isAsync, isNonnullReturn) => {
+  var argTypes = heap32VectorToArray(argCount, rawArgTypesAddr);
+  name = readLatin1String(name);
+  name = getFunctionName(name);
+  rawInvoker = embind__requireFunction(signature, rawInvoker);
+  exposePublicSymbol(name, function() {
+    throwUnboundTypeError(`Cannot call ${name} due to unbound types`, argTypes);
+  }, argCount - 1);
+  whenDependentTypesAreResolved([], argTypes, argTypes => {
+    var invokerArgsArray = [ argTypes[0], /* return value */ null ].concat(/* no class 'this'*/ argTypes.slice(1));
+    /* actual params */ replacePublicSymbol(name, craftInvokerFunction(name, invokerArgsArray, null, /* no class 'this'*/ rawInvoker, fn, isAsync), argCount - 1);
+    return [];
+  });
+};
+
 /** @suppress {globalThis} */ var __embind_register_integer = (primitiveType, name, size, minRange, maxRange) => {
   name = readLatin1String(name);
   // LLVM doesn't have signed and unsigned 32-bit types, so u32 literals come
@@ -2831,8 +2915,7 @@ var lengthBytesUTF8 = str => {
 
 var __embind_register_std_string = (rawType, name) => {
   name = readLatin1String(name);
-  var stdStringIsUTF8 = //process only std::string bindings with UTF8 support, in contrast to e.g. std::basic_string<unsigned char>
-  (name === "std::string");
+  var stdStringIsUTF8 = true;
   registerType(rawType, {
     name,
     // For some method names we use string keys here since they are part of
@@ -3097,6 +3180,27 @@ var __embind_register_std_wstring = (rawType, charSize, name) => {
     destructorFunction(ptr) {
       _free(ptr);
     }
+  });
+};
+
+var __embind_register_value_object = (rawType, name, constructorSignature, rawConstructor, destructorSignature, rawDestructor) => {
+  structRegistrations[rawType] = {
+    name: readLatin1String(name),
+    rawConstructor: embind__requireFunction(constructorSignature, rawConstructor),
+    rawDestructor: embind__requireFunction(destructorSignature, rawDestructor),
+    fields: []
+  };
+};
+
+var __embind_register_value_object_field = (structType, fieldName, getterReturnType, getterSignature, getter, getterContext, setterArgumentType, setterSignature, setter, setterContext) => {
+  structRegistrations[structType].fields.push({
+    fieldName: readLatin1String(fieldName),
+    getterReturnType,
+    getter: embind__requireFunction(getterSignature, getter),
+    getterContext,
+    setterArgumentType,
+    setter: embind__requireFunction(setterSignature, setter),
+    setterContext
   });
 };
 
@@ -3390,7 +3494,7 @@ var getEmptyTableSlot = () => {
   }
   // Grow the table
   try {
-    wasmTable.grow(1);
+    /** @suppress {checkTypes} */ wasmTable.grow(1);
   } catch (err) {
     if (!(err instanceof RangeError)) {
       throw err;
@@ -3401,11 +3505,11 @@ var getEmptyTableSlot = () => {
 };
 
 var setWasmTableEntry = (idx, func) => {
-  wasmTable.set(idx, func);
+  /** @suppress {checkTypes} */ wasmTable.set(idx, func);
   // With ABORT_ON_WASM_EXCEPTIONS wasmTable.get is overridden to return wrapped
   // functions so we need to call it here to retrieve the potential wrapper correctly
   // instead of just storing 'func' directly into wasmTableMirror
-  wasmTableMirror[idx] = wasmTable.get(idx);
+  /** @suppress {checkTypes} */ wasmTableMirror[idx] = wasmTable.get(idx);
 };
 
 /** @param {string=} sig */ var addFunction = (func, sig) => {
@@ -3446,19 +3550,19 @@ var removeFunction = index => {
   freeTableIndexes.push(index);
 };
 
+InternalError = Module["InternalError"] = class InternalError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "InternalError";
+  }
+};
+
 embind_init_charCodes();
 
 BindingError = Module["BindingError"] = class BindingError extends Error {
   constructor(message) {
     super(message);
     this.name = "BindingError";
-  }
-};
-
-InternalError = Module["InternalError"] = class InternalError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "InternalError";
   }
 };
 
@@ -3479,6 +3583,7 @@ var wasmImports = {
   /** @export */ __cxa_throw: ___cxa_throw,
   /** @export */ __handle_stack_overflow: ___handle_stack_overflow,
   /** @export */ _abort_js: __abort_js,
+  /** @export */ _embind_finalize_value_object: __embind_finalize_value_object,
   /** @export */ _embind_register_bigint: __embind_register_bigint,
   /** @export */ _embind_register_bool: __embind_register_bool,
   /** @export */ _embind_register_class: __embind_register_class,
@@ -3490,11 +3595,14 @@ var wasmImports = {
   /** @export */ _embind_register_enum: __embind_register_enum,
   /** @export */ _embind_register_enum_value: __embind_register_enum_value,
   /** @export */ _embind_register_float: __embind_register_float,
+  /** @export */ _embind_register_function: __embind_register_function,
   /** @export */ _embind_register_integer: __embind_register_integer,
   /** @export */ _embind_register_memory_view: __embind_register_memory_view,
   /** @export */ _embind_register_optional: __embind_register_optional,
   /** @export */ _embind_register_std_string: __embind_register_std_string,
   /** @export */ _embind_register_std_wstring: __embind_register_std_wstring,
+  /** @export */ _embind_register_value_object: __embind_register_value_object,
+  /** @export */ _embind_register_value_object_field: __embind_register_value_object_field,
   /** @export */ _embind_register_void: __embind_register_void,
   /** @export */ _emval_take_value: __emval_take_value,
   /** @export */ alignfault,
@@ -3505,7 +3613,9 @@ var wasmImports = {
   /** @export */ segfault
 };
 
-var wasmExports = createWasm();
+var wasmExports;
+
+createWasm();
 
 var ___wasm_call_ctors = createExportWrapper("__wasm_call_ctors", 0);
 
@@ -3515,11 +3625,11 @@ var _malloc = Module["_malloc"] = createExportWrapper("malloc", 1);
 
 var _fflush = createExportWrapper("fflush", 1);
 
-var _emscripten_get_sbrk_ptr = createExportWrapper("emscripten_get_sbrk_ptr", 0);
-
 var _sbrk = createExportWrapper("sbrk", 1);
 
 var _free = Module["_free"] = createExportWrapper("free", 1);
+
+var _emscripten_get_sbrk_ptr = createExportWrapper("emscripten_get_sbrk_ptr", 0);
 
 var _emscripten_stack_init = () => (_emscripten_stack_init = wasmExports["emscripten_stack_init"])();
 
@@ -3543,7 +3653,7 @@ Module["addFunction"] = addFunction;
 
 Module["removeFunction"] = removeFunction;
 
-var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertI32PairToI53Checked", "convertU32PairToI53", "stackAlloc", "getTempRet0", "setTempRet0", "zeroMemory", "exitJS", "strError", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "initRandomFill", "randomFill", "emscriptenLog", "readEmAsmArgs", "jstoi_q", "getExecutableName", "listenOnce", "autoResumeAudioContext", "getDynCaller", "dynCall", "handleException", "keepRuntimeAlive", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "asmjsMangle", "asyncLoad", "mmapAlloc", "HandleAllocator", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "reallyNegative", "strLen", "reSign", "formatString", "intArrayFromString", "intArrayToString", "AsciiToString", "stringToAscii", "stringToNewUTF8", "stringToUTF8OnStack", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "jsStackTrace", "getCallstack", "convertPCtoSourceLocation", "getEnvStrings", "checkWasiClock", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "createDyncallWrapper", "safeSetTimeout", "setImmediateWrapped", "clearImmediateWrapped", "polyfillSetImmediate", "registerPostMainLoop", "registerPreMainLoop", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "safeRequestAnimationFrame", "isLeapYear", "ydayFromDate", "arraySum", "addDays", "getSocketFromFD", "getSocketAddress", "heapObjectForWebGLType", "toTypedArrayIndex", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "webgl_enable_EXT_polygon_offset_clamp", "webgl_enable_EXT_clip_control", "webgl_enable_WEBGL_polygon_mode", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "setErrNo", "demangle", "stackTrace", "getFunctionArgsName", "createJsInvokerSignature", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "setDelayFunction", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
+var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertI32PairToI53Checked", "convertU32PairToI53", "stackAlloc", "getTempRet0", "setTempRet0", "zeroMemory", "exitJS", "strError", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "emscriptenLog", "readEmAsmArgs", "jstoi_q", "getExecutableName", "listenOnce", "autoResumeAudioContext", "getDynCaller", "dynCall", "handleException", "keepRuntimeAlive", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "asmjsMangle", "asyncLoad", "mmapAlloc", "HandleAllocator", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "reallyNegative", "strLen", "reSign", "formatString", "intArrayFromString", "intArrayToString", "AsciiToString", "stringToAscii", "stringToNewUTF8", "stringToUTF8OnStack", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "jsStackTrace", "getCallstack", "convertPCtoSourceLocation", "getEnvStrings", "checkWasiClock", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "initRandomFill", "randomFill", "safeSetTimeout", "setImmediateWrapped", "safeRequestAnimationFrame", "clearImmediateWrapped", "polyfillSetImmediate", "registerPostMainLoop", "registerPreMainLoop", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "isLeapYear", "ydayFromDate", "arraySum", "addDays", "getSocketFromFD", "getSocketAddress", "heapObjectForWebGLType", "toTypedArrayIndex", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "webgl_enable_EXT_polygon_offset_clamp", "webgl_enable_EXT_clip_control", "webgl_enable_WEBGL_polygon_mode", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "setErrNo", "demangle", "stackTrace", "getFunctionArgsName", "createJsInvokerSignature", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "setDelayFunction", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
 
 missingLibrarySymbols.forEach(missingLibrarySymbol);
 
@@ -3552,8 +3662,6 @@ var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "ad
 unexportedSymbols.forEach(unexportedRuntimeSymbol);
 
 var calledRun;
-
-var calledPrerun;
 
 dependenciesFulfilled = function runCaller() {
   // If run has never been called, and we should call run (INVOKE_RUN is true, and Module.noInitialRun is not false)
@@ -3576,20 +3684,17 @@ function run() {
     return;
   }
   stackCheckInit();
-  if (!calledPrerun) {
-    calledPrerun = 1;
-    preRun();
-    // a preRun added a dependency, run will be called later
-    if (runDependencies > 0) {
-      return;
-    }
+  preRun();
+  // a preRun added a dependency, run will be called later
+  if (runDependencies > 0) {
+    return;
   }
   function doRun() {
     // run may have just been called through dependencies being fulfilled just in this very frame,
     // or while the async setStatus time below was happening
     if (calledRun) return;
-    calledRun = 1;
-    Module["calledRun"] = 1;
+    calledRun = true;
+    Module["calledRun"] = true;
     if (ABORT) return;
     initRuntime();
     readyPromiseResolve(Module);
@@ -3649,9 +3754,9 @@ if (Module["preInit"]) {
 run();
 
 // end include: postamble.js
-// include: /mnt/d/ErikSom/Pathopsv0-WASM/pathopsv0-wasm/utils-stub.js
+// include: /Users/eriksombroek/_projects/cplusplus/Pathopsv0-WASM/pathopsv0-wasm/utils-stub.js
 // maybe we want something here at some point
-// end include: /mnt/d/ErikSom/Pathopsv0-WASM/pathopsv0-wasm/utils-stub.js
+// end include: /Users/eriksombroek/_projects/cplusplus/Pathopsv0-WASM/pathopsv0-wasm/utils-stub.js
 // include: postamble_modularize.js
 // In MODULARIZE mode we wrap the generated code in a factory function
 // and return either the Module itself, or a promise of the module.
