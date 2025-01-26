@@ -1,6 +1,6 @@
 # Building and running Pathopsv0
 
-# step 1 building the framework
+### step 1 building the framework
 ```bash
 # From project root
 $cd pathopsv0
@@ -12,10 +12,10 @@ $cmake ..
 $make
 ```
 
-# step 2 installing emsdk
+### step 2 installing emsdk
 See https://emscripten.org/docs/getting_started/downloads.html
 
-# step 3 building the wasm
+### step 3 building the wasm
 ```bash
 # From project root
 $source "/path/to/your/emsdk/emsdk_env.sh"
@@ -23,9 +23,9 @@ $npm install
 $npm run build-wasm
 ```
 
-# step 4 testing the wasm
+### step 4 testing the wasm
 ```bash
 # From project root
 $npm run dev
 ```
-navigate to http://localhost:8080/ in your browser
+navigate to http://localhost:8080/examples/es/ in your browser and open any of the examples
