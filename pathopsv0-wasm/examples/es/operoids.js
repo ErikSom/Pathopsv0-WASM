@@ -115,12 +115,16 @@ PathopsV0Factory().then((PathopsV0) => {
             case 3: pathA.reverseDifference(pathB); break;
             case 4: pathA.xor(pathB); break;
         }
+
         const commands = pathA.toCommands();
+
         pathA.delete();
         pathB.delete();
+
         ctx.beginPath();
         for (let i = 0; i < commands.size(); i++) {
-            const { type: { value: type }, data } = commands.get(i);
+            const command = commands.get(i);
+            const { type: { value: type }, data } = command;
             switch (type) {
                 case 0:
                     ctx.moveTo(data.get(0), data.get(1));
@@ -132,7 +136,11 @@ PathopsV0Factory().then((PathopsV0) => {
                     ctx.closePath();
                     break;
             }
+            // clean memory for each command and data
+            data.delete();
+            command.delete();
         }
+
         commands.delete();
         ctx.fillStyle = 'red';
         ctx.fill();
