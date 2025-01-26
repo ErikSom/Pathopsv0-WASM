@@ -1,0 +1,16 @@
+{
+  "name": "pathopsv0-wasm",
+  "version": "1.0.0",
+  "description": "# step 1 building the framework ```bash $cd pathopsv0 $unzip cmake/skiatests.zip -d . $cd cmake $mkdir mytest $cd mytest $cmake .. $make ``` # step 2 building the wasm ```bash $cd to the root of the project $sh pathopsv0-wasm/compile-wasm.sh ```",
+  "main": "index.js",
+  "scripts": {
+    "build-wasm": "sh pathopsv0-wasm/compile-wasm.sh",
+    "dev": "http-server -c-1 -p 8080 ./pathopsv0-wasm"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
