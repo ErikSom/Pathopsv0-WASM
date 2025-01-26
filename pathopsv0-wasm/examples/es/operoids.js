@@ -1,4 +1,5 @@
 import PathopsV0Factory from '../../dist/es/pathops.js';
+import { drawMemoryUsage } from '../utils/memoryDebug.js';
 
 PathopsV0Factory().then((PathopsV0) => {
     var { FillPath2D, PathOps } = PathopsV0;
@@ -153,6 +154,10 @@ PathopsV0Factory().then((PathopsV0) => {
             bY = -50;
         ctx.fillStyle = 'white';
         ctx.fillText(texts[textIndex], canvas.width / 2, canvas.height - 10);
+
+        // visualize memory usage
+        drawMemoryUsage(PathopsV0, ctx);
+
         requestAnimationFrame(drawCanvas);
     }
 });
